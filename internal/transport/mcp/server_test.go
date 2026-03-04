@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,5 +92,93 @@ func TestHandleToolCall_IgnoresUnknownEnvelopeFields(t *testing.T) {
 	res := srv.handleToolCall(context.Background(), req)
 	if res.Error != nil {
 		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
+func TestInitialize_EchoesClientProtocolVersion(t *testing.T) {
+	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
+	srv := NewServer(svc, nil, "", "", bytes.NewBuffer(nil), io.Discard)
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("3"),
+		Method:  "initialize",
+		Params:  json.RawMessage(`{"protocolVersion":"2025-06-18"}`),
+	}
+
+	res := srv.handleRequest(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+
+	var out initializeResult
+	b, err := json.Marshal(res.Result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal initialize result: %v", err)
+	}
+	if out.ProtocolVersion != "2025-06-18" {
+		t.Fatalf("expected protocol version 2025-06-18, got %q", out.ProtocolVersion)
+	}
+}
+
+func TestReadMessage_LineDelimitedJSON(t *testing.T) {
+	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
+	srv := NewServer(svc, nil, "", "", strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n"), io.Discard)
+
+	msg, err := srv.readMessage()
+	if err != nil {
+		t.Fatalf("readMessage returned error: %v", err)
+	}
+	if string(msg) != "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}" {
+		t.Fatalf("unexpected message: %s", string(msg))
+	}
+}
+
+func TestReadMessage_ContentLengthFramed(t *testing.T) {
+	payload := "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"
+	frame := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
+
+	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
+	srv := NewServer(svc, nil, "", "", strings.NewReader(frame), io.Discard)
+
+	msg, err := srv.readMessage()
+	if err != nil {
+		t.Fatalf("readMessage returned error: %v", err)
+	}
+	if string(msg) != payload {
+		t.Fatalf("unexpected framed message: %s", string(msg))
+	}
+}
+
+func TestWriteResponse_LineDelimitedMode(t *testing.T) {
+	in := strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n")
+	var out bytes.Buffer
+
+	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
+	srv := NewServer(svc, nil, "", "", in, &out)
+
+	_, err := srv.readMessage()
+	if err != nil {
+		t.Fatalf("readMessage returned error: %v", err)
+	}
+
+	err = srv.writeResponse(rpcResponse{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("1"),
+		Result:  map[string]any{"ok": true},
+	})
+	if err != nil {
+		t.Fatalf("writeResponse returned error: %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "Content-Length:") {
+		t.Fatalf("unexpected framed output in line-delimited mode: %q", got)
+	}
+	if !strings.HasSuffix(got, "\n") {
+		t.Fatalf("expected newline-delimited response, got %q", got)
 	}
 }

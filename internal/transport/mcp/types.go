@@ -54,6 +54,10 @@ type initializeResult struct {
 	} `json:"serverInfo"`
 }
 
+type initializeParams struct {
+	ProtocolVersion string `json:"protocolVersion,omitempty"`
+}
+
 type toolCallResult struct {
 	Content           []toolContent `json:"content"`
 	StructuredContent any           `json:"structuredContent,omitempty"`

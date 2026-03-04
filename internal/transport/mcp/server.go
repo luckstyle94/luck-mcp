@@ -30,7 +30,16 @@ type Server struct {
 	reader *bufio.Reader
 	writer io.Writer
 	mu     sync.Mutex
+	mode   messageMode
 }
+
+type messageMode int
+
+const (
+	modeUnknown messageMode = iota
+	modeFramed
+	modeLineDelimited
+)
 
 func NewServer(
 	svc *service.ContextService,
@@ -120,7 +129,15 @@ func (s *Server) handleNotification(ctx context.Context, req rpcRequest) {
 func (s *Server) handleRequest(ctx context.Context, req rpcRequest) rpcResponse {
 	switch req.Method {
 	case "initialize":
-		result := initializeResult{ProtocolVersion: protocolVer}
+		var params initializeParams
+		if err := decodeJSONLoose(req.Params, &params); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		selectedVersion := strings.TrimSpace(params.ProtocolVersion)
+		if selectedVersion == "" {
+			selectedVersion = protocolVer
+		}
+		result := initializeResult{ProtocolVersion: selectedVersion}
 		result.Capabilities.Tools.ListChanged = false
 		result.ServerInfo.Name = s.name
 		result.ServerInfo.Version = s.version
@@ -266,14 +283,35 @@ func (s *Server) writeRPCError(id json.RawMessage, code int, msg string) {
 
 func (s *Server) readMessage() ([]byte, error) {
 	contentLength := -1
+	seenNonEmpty := false
 	for {
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
+			// Some clients send newline-delimited JSON and may close without trailing newline.
+			if errors.Is(err, io.EOF) && strings.TrimSpace(line) != "" {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+					return []byte(trimmed), nil
+				}
+			}
 			return nil, err
 		}
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
+			if !seenNonEmpty {
+				continue
+			}
 			break
+		}
+		if !seenNonEmpty {
+			seenNonEmpty = true
+			// Compatibility mode for clients that use JSON-RPC line-delimited on stdio.
+			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+				if s.mode == modeUnknown {
+					s.mode = modeLineDelimited
+				}
+				return []byte(trimmed), nil
+			}
 		}
 		parts := strings.SplitN(trimmed, ":", 2)
 		if len(parts) != 2 {
@@ -285,6 +323,9 @@ func (s *Server) readMessage() ([]byte, error) {
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return nil, fmt.Errorf("invalid content-length %q: %w", value, err)
+			}
+			if s.mode == modeUnknown {
+				s.mode = modeFramed
 			}
 			contentLength = n
 		}
@@ -312,6 +353,16 @@ func (s *Server) writeResponse(resp rpcResponse) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.mode == modeLineDelimited {
+		if _, err := s.writer.Write(b); err != nil {
+			return err
+		}
+		if _, err := io.WriteString(s.writer, "\n"); err != nil {
+			return err
+		}
+		return nil
+	}
 
 	header := fmt.Sprintf("Content-Length: %d\r\nContent-Type: application/json\r\n\r\n", len(b))
 	if _, err := io.WriteString(s.writer, header); err != nil {

@@ -1,252 +1,290 @@
-# luck-mpc: MCP Server de Memoria Persistente para Agents
-# Completamente feito por IA ( CODEX 5.3 )
+# luck-mpc: memoria persistente para agents de IA via MCP
 
-## 1) O que e MCP (Model Context Protocol)
-MCP (Model Context Protocol) e um protocolo para conectar agentes de IA a ferramentas externas de forma padronizada.
+## Versoes de documentacao
+- Portugues (guia completo): [README.md](./README.md)
+- Portugues (quickstart): [QUICKSTART.md](./QUICKSTART.md)
+- English (full guide): [README.en.md](./README.en.md)
+- English (quickstart): [QUICKSTART.en.md](./QUICKSTART.en.md)
 
-Neste projeto, o MCP Server expoe ferramentas para salvar e recuperar memoria persistente de projeto. Isso permite que agentes como Cursor, VSCode + extensao compatível, Codex CLI e Claude consultem o mesmo contexto compartilhado.
+## 1) O que este projeto faz (explicacao simples)
+Este projeto cria um servidor MCP local para guardar e recuperar contexto de trabalho.
 
-## 2) O que este MCP resolve
-Este MCP foi desenhado para reduzir problemas comuns de contexto em projetos grandes:
+Na pratica, isso permite que seu agent (Cursor, Codex CLI, Claude Code, VSCode com suporte MCP) tenha uma "memoria" persistente entre sessoes.
 
-- limite de contexto em sessoes longas
-- perda de conhecimento entre sessoes
-- falta de memoria compartilhada entre diferentes agents
+Voce salva:
+- decisoes de arquitetura
+- gotchas
+- resumos de tarefas
+- contexto util de codigo
 
-Com isso, voce ganha:
+E depois busca por significado (busca semantica), nao so por texto exato.
 
-- persistencia de conhecimento em Postgres + pgvector
-- busca semantica por similaridade
-- bootstrap rapido de sessoes com `project_brief`
-
-## 3) Arquitetura
-Diagrama simplificado:
+## 2) Como funciona por baixo
+Arquitetura simplificada:
 
 ```text
-Agent (Cursor / VSCode / Codex CLI / Claude)
-        | (MCP STDIO / JSON-RPC)
+Agent (Cursor / Codex / Claude / VSCode)
+        |  MCP (STDIO)
         v
 MCP Server (Go)
         |
-        +--> Ollama (embeddings local via HTTP)
+        +--> Postgres + pgvector (persistencia)
         |
-        +--> Postgres + pgvector (persistente)
+        +--> Ollama (embeddings locais)
 ```
 
-Fluxo resumido:
+## 3) Pre-requisitos
+Voce precisa de:
+- Docker
+- Docker Compose
 
-1. Agent chama tool MCP (`context_add`, `context_search`, `project_brief`).
-2. MCP Server valida entrada e orquestra a acao.
-3. Para `add/search`, gera embedding no Ollama.
-4. Persiste/consulta dados no Postgres + pgvector.
+Nao precisa instalar Postgres nem Ollama manualmente.
 
-## 4) Como subir localmente
-### Pre-requisitos
-- Docker + Docker Compose
-
-### Subir stack
-```bash
-make up
-```
-
-Servicos do `docker-compose.yml`:
-
-- `postgres`: banco com extensao pgvector
-- `ollama`: servico local de embeddings
-- `mcp`: servidor MCP em modo STDIO
-
-Migrations:
-
-- o `postgres` aplica automaticamente, no primeiro start do volume, os scripts:
-  - `migrations/0001_init.up.sql`
-  - `migrations/0002_dedupe_index.up.sql`
-  - `migrations/0003_dedupe_existing_hashes.up.sql`
-- para reaplicar manualmente no banco ja existente, use `make migrate` (executa todos os `*.up.sql`)
-- se precisar reinicializar do zero via init script, remova o volume `pgdata` antes de subir novamente
-- em upgrades de bases antigas, a `0003` remove duplicados por `(project, content_hash)` mantendo o registro mais recente
-
-Volumes persistentes:
-
-- `pgdata` para dados do Postgres
-- `ollama` para modelos do Ollama
-
-Parar stack:
+## 4) Setup inicial (primeira vez)
+Rode exatamente nesta ordem:
 
 ```bash
-make down
-```
+cd /home/luckstyle/repo/private/luck-mpc
 
-## 5) Como preparar o modelo no Ollama
-O modelo padrao e `nomic-embed-text`.
-
-Depois de subir o `ollama`, baixe o modelo:
-
-```bash
+docker compose build mcp
+docker compose up -d postgres ollama mcp
+make migrate
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
-Sem esse pull, as tools que dependem de embedding podem falhar.
+O que cada comando faz:
+1. `build mcp`: gera a imagem local do servidor MCP.
+2. `up -d postgres ollama mcp`: sobe banco, embeddings e container base do MCP.
+3. `make migrate`: aplica schema no banco (`0001`, `0002`, `0003`).
+4. `ollama pull`: baixa o modelo de embedding.
 
-## 6) Como usar no Cursor
-O Cursor precisa iniciar este servidor como processo local (STDIO).
+## 5) Rotina diaria (uso normal)
+### Iniciar ambiente no comeco do dia
+```bash
+cd /home/luckstyle/repo/private/luck-mpc
+docker compose up -d postgres ollama mcp
+```
 
-Onde configurar:
+### Parar ambiente no fim do dia
+```bash
+cd /home/luckstyle/repo/private/luck-mpc
+docker compose down
+```
 
-- Cursor Settings > MCP (ou Integrations/MCP, conforme a versao)
-- ou arquivo de configuracao MCP do Cursor (ex.: `~/.cursor/mcp.json`, dependendo da instalacao)
+### Quando rodar `make migrate`?
+Rode quando:
+- for primeira subida do ambiente
+- entrar migration nova no repositorio
+- quiser garantir schema alinhado
 
-### Exemplo de configuracao MCP (ajuste caminho)
+Comando:
+```bash
+cd /home/luckstyle/repo/private/luck-mpc
+make migrate
+```
+
+## 6) Configurar no Cursor (recomendado)
+Use esta configuracao MCP no Cursor:
+
 ```json
 {
   "mcpServers": {
     "luck-mpc": {
-      "command": "/home/luckstyle/repo/private/luck-mpc/mcp-server",
-      "args": [],
-      "env": {
-        "DATABASE_URL": "postgres://mcp:mcp@localhost:5432/mcp?sslmode=disable",
-        "OLLAMA_URL": "http://localhost:11434",
-        "OLLAMA_EMBED_MODEL": "nomic-embed-text",
-        "LOG_LEVEL": "info"
-      }
+      "command": "docker",
+      "args": [
+        "exec",
+        "-e",
+        "LOG_LEVEL=error",
+        "-i",
+        "luck-mpc-server",
+        "/mcp-server"
+      ]
     }
   }
 }
 ```
 
-### Build do binario local
+Observacoes importantes:
+- Essa estrategia usa `docker exec` e evita problemas de timeout comuns de `docker compose run`.
+- O container `luck-mpc-server` precisa estar ativo (`docker compose up -d ...`).
+- Se quiser projeto padrao sem enviar `project` toda hora, adicione no `args`:
+  - `"-e", "MCP_PROJECT_DEFAULT=meu-projeto"`
+
+Depois de salvar configuracao no Cursor:
+1. Reload Window
+2. Verificar se o MCP ficou `ready`
+3. Verificar se tools aparecem: `context_add`, `context_search`, `project_brief`
+
+## 7) Configurar em outros clients (Codex CLI, Claude Code, VSCode)
+Regra geral: qualquer cliente MCP que aceite `command + args` pode usar o mesmo comando do Cursor.
+
+Comando base:
 ```bash
-go build -o mcp-server ./cmd/mcp-server
+docker exec -e LOG_LEVEL=error -i luck-mpc-server /mcp-server
 ```
 
-### Como verificar se o Cursor chamou as tools
-- confira logs do processo MCP (stdout/stderr da integracao)
-- busque chamadas para `tools/list` e `tools/call`
-- valide inserts no banco (`documents`, `doc_embeddings`)
-- o servidor tolera `_meta` e outros campos extras no envelope de `tools/call` para compatibilidade entre clients
-
-## 7) Como usar no VSCode
-Cenarios comuns:
-
-- extensao/agent no VSCode com suporte nativo a MCP
-- ferramenta externa que inicia MCP local e integra ao agent do VSCode
-
-Onde configurar no VSCode:
-
-- nas configuracoes da extensao/agent MCP que voce estiver usando
-- ou em arquivo de config da propria extensao/ferramenta (comando + env do servidor MCP)
-
-Em ambos os casos, o principio e o mesmo:
-
-1. rodar este servidor local em STDIO
-2. apontar o cliente MCP para o comando do binario
-3. definir variaveis de ambiente (`DATABASE_URL`, `OLLAMA_URL`, etc.)
-
-Exemplo de comando local:
-
+Para clients que aceitam env no comando, opcional:
 ```bash
-DATABASE_URL='postgres://mcp:mcp@localhost:5432/mcp?sslmode=disable' \
-OLLAMA_URL='http://localhost:11434' \
-OLLAMA_EMBED_MODEL='nomic-embed-text' \
-./mcp-server
+docker exec -e LOG_LEVEL=error -e MCP_PROJECT_DEFAULT=meu-projeto -i luck-mpc-server /mcp-server
 ```
 
-## 8) Exemplos praticos das tools
-### `context_add`
-Entrada:
+## 8) Como usar no dia a dia com a IA
+As 3 tools disponiveis sao:
+- `context_add`
+- `context_search`
+- `project_brief`
 
+### 8.1 Fluxo recomendado de uso
+1. Inicio de sessao:
+- pedir `project_brief` para carregar contexto principal
+
+2. Antes de mexer em area critica:
+- usar `context_search` com query objetiva
+
+3. Depois de decidir algo importante:
+- usar `context_add` com `kind=summary` ou `kind=memory`
+
+4. Fim de tarefa grande:
+- salvar resumo final com `importance` alta
+
+### 8.2 Prompts prontos (copiar e colar)
+Inicio da sessao:
+
+```text
+Use a tool project_brief para o projeto "meu-projeto" com max_items 20 e me mostre um resumo objetivo.
+```
+
+Buscar contexto antes de codar:
+
+```text
+Use context_search no projeto "meu-projeto" com query "fluxo de autenticacao" e k=8.
+```
+
+Salvar decisao de arquitetura:
+
+```text
+Use context_add para salvar no projeto "meu-projeto":
+kind="summary", tags=["arquitetura","auth"], importance=5,
+content="Decisao: ..."
+```
+
+Salvar gotcha de debugging:
+
+```text
+Use context_add no projeto "meu-projeto" com kind="memory",
+tags=["gotcha","deploy"], importance=4,
+content="Problema: ... Causa: ... Solucao: ..."
+```
+
+### 8.3 Formato de dados recomendado
+- `project`: nome estavel do projeto (ex: `nexus-api`)
+- `kind`:
+  - `summary` para decisoes e resumos oficiais
+  - `memory` para aprendizado/gotcha
+  - `note` para anotacao rapida
+  - `chunk` para trechos curtos
+- `tags`: 2 a 5 tags consistentes
+- `importance`:
+  - `5`: critico
+  - `4`: muito importante
+  - `3`: relevante
+  - `0-2`: contexto leve
+
+## 9) Exemplos JSON das tools
+### context_add
 ```json
 {
-  "project": "nexus-api",
-  "kind": "note",
-  "path": "internal/auth/service.go",
-  "tags": ["auth", "jwt"],
-  "content": "Decisao: refresh token expira em 7 dias e e rotacionado a cada login.",
-  "importance": 4
-}
-```
-
-Resposta:
-
-```json
-{ "id": 123 }
-```
-
-### `context_add` (gotcha)
-```json
-{
-  "project": "nexus-api",
-  "kind": "memory",
-  "tags": ["gotcha", "postgres"],
-  "content": "Nao usar SERIAL novo em tabelas novas; padronizar BIGSERIAL para consistencia.",
-  "importance": 3
-}
-```
-
-### `context_add` (summary)
-```json
-{
-  "project": "nexus-api",
+  "project": "meu-projeto",
   "kind": "summary",
-  "content": "Resumo sprint 12: migracao de auth para middleware unico finalizada.",
+  "path": "internal/auth/service.go",
+  "tags": ["auth", "arquitetura"],
+  "content": "Decisao: refresh token com rotacao e expiracao de 7 dias.",
   "importance": 5
 }
 ```
 
-### `context_search`
+### context_search
 ```json
 {
-  "project": "nexus-api",
-  "query": "fluxo de auth",
-  "k": 8
+  "project": "meu-projeto",
+  "query": "fluxo de autenticacao",
+  "k": 8,
+  "path_prefix": "internal/auth/",
+  "tags": ["auth"],
+  "kind": "any"
 }
 ```
 
-### `context_search` com filtros
+### project_brief
 ```json
 {
-  "project": "nexus-api",
-  "query": "juros compostos",
-  "k": 5,
-  "path_prefix": "internal/finance/",
-  "tags": ["formula", "regra-negocio"],
-  "kind": "note"
-}
-```
-
-### `project_brief`
-```json
-{
-  "project": "nexus-api",
+  "project": "meu-projeto",
   "max_items": 20
 }
 ```
 
-Resposta:
+## 10) Boas praticas para memoria realmente util
+- Salve menos, mas salve melhor.
+- Prefira `summary` para decisoes fechadas.
+- Evite texto vago; escreva "decisao + motivo + impacto".
+- Padronize tags por dominio (`auth`, `billing`, `infra`, `db`).
+- Sempre que mudar decisao antiga, grave novo summary explicando a mudanca.
 
-```json
-{
-  "brief": "Brief de contexto do projeto nexus-api: ..."
-}
+## 11) Troubleshooting (problemas comuns)
+### Cursor fica em "loading tools"
+Checklist:
+1. `docker compose ps` e confirmar `luck-mpc-server`, `luck-mpc-postgres`, `luck-mpc-ollama` como `Up`
+2. conferir config MCP usando `docker exec ... /mcp-server`
+3. rodar `docker compose build mcp` apos mudancas de codigo
+4. Reload Window no Cursor
+
+### "model not found" no Ollama
+Rode:
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
 ```
 
-## 9) Boas praticas de uso (qualquer agent)
-O que vale salvar:
+### Erro de banco/schema
+Rode:
+```bash
+make migrate
+```
 
-- decisoes de arquitetura
-- invariantes de dominio
-- mapas de fluxo importantes
-- gotchas e armadilhas recorrentes
-- resumos periodicos (`kind=summary`)
+### Base antiga com duplicados
+A migration `0003` limpa duplicados por `(project, content_hash)` mantendo o registro mais recente, depois recria o indice unico.
 
-Como evitar virar “lixao”:
+## 12) Comandos de referencia rapida
+Subir ambiente:
+```bash
+docker compose up -d postgres ollama mcp
+```
 
-- use `tags` de forma consistente
-- preencha `kind` corretamente
-- use `path` quando houver arquivo relevante
-- use `importance` para sinalizar o que e critico
-- consolide contexto em summaries de tempos em tempos
+Aplicar migrations:
+```bash
+make migrate
+```
 
-## 10) Estrutura de pastas e evolucao
+Baixar modelo:
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Ver status:
+```bash
+docker compose ps
+```
+
+Ver logs do MCP:
+```bash
+docker logs --tail=200 luck-mpc-server
+```
+
+Parar tudo:
+```bash
+docker compose down
+```
+
+## 13) Estrutura do projeto
 ```text
 .
 ├─ cmd/
@@ -254,30 +292,17 @@ Como evitar virar “lixao”:
 │     └─ main.go
 ├─ internal/
 │  ├─ config/
-│  │  └─ config.go
 │  ├─ db/
-│  │  └─ db.go
 │  ├─ domain/
-│  │  ├─ document.go
-│  │  └─ errors.go
 │  ├─ embeddings/
-│  │  ├─ ollama_client.go
-│  │  └─ models.go
 │  ├─ repository/
-│  │  ├─ document_repository.go
-│  │  └─ postgres_document_repository.go
 │  ├─ service/
-│  │  └─ context_service.go
-│  └─ transport/
-│     └─ mcp/
-│        ├─ server.go
-│        ├─ tools.go
-│        └─ types.go
+│  └─ transport/mcp/
 ├─ migrations/
 │  ├─ 0001_init.up.sql
-│  └─ 0001_init.down.sql
+│  ├─ 0001_init.down.sql
 │  ├─ 0002_dedupe_index.up.sql
-│  └─ 0002_dedupe_index.down.sql
+│  ├─ 0002_dedupe_index.down.sql
 │  ├─ 0003_dedupe_existing_hashes.up.sql
 │  └─ 0003_dedupe_existing_hashes.down.sql
 ├─ docker-compose.yml
@@ -288,36 +313,14 @@ Como evitar virar “lixao”:
 └─ README.md
 ```
 
-### Onde evoluir depois
-- `internal/transport/mcp`: novas tools
-- `internal/service`: regras de negocio
-- `internal/repository`: filtros/queries mais avancados
-- `migrations`: novas estruturas de persistencia
-
-## Variaveis de ambiente
+## 14) Variaveis de ambiente
 - `DATABASE_URL` (obrigatorio)
 - `OLLAMA_URL` (default `http://ollama:11434`)
 - `OLLAMA_EMBED_MODEL` (default `nomic-embed-text`)
-- `MCP_PROJECT_DEFAULT` (opcional, usado quando `project` nao for enviado nas tools)
+- `MCP_PROJECT_DEFAULT` (opcional)
 - `LOG_LEVEL` (default `info`)
 
-## Observacao sobre dimensao do vetor
-A migration cria `VECTOR(768)` e o servico valida embeddings com 768 dimensoes.
+## 15) Limite e escopo do MVP
+Este MCP e memoria explicita: ele salva e busca o que voce pedir.
 
-Se trocar para um modelo com outra dimensao, ajuste:
-
-1. `migrations/0001_init.up.sql` (coluna `embedding VECTOR(768)`)
-2. `internal/config/config.go` (`defaultEmbeddingDim`)
-3. recrie/aplique migration compativel
-
-## Comandos uteis
-```bash
-make fmt
-make test
-make migrate
-```
-
-## Escopo deste MVP
-Este projeto implementa apenas memoria explicita via tools MCP.
-
-Nao ha indexacao automatica de repositorio neste MVP.
+Nao faz indexacao automatica do repositorio neste MVP.
