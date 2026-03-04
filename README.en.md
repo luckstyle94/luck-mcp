@@ -102,6 +102,34 @@ Practical rules:
 - MCP tools (`context_add`, `context_search`, `project_brief`) are used in your agent chat (Cursor/Codex/Claude), not in terminal.
 - You do not need to manually enter containers for normal usage.
 
+### Real example: I am working in `/home/my-project1`
+If you are working on this project, keep the same MCP project name, for example: `my-project1`.
+
+In terminal (inside `luck-mpc` repo), run:
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make up
+make index PROJECT=my-project1 ROOT=/home/my-project1
+```
+
+Then in AI chat (Cursor/Codex/Claude), call tools with that same project:
+```text
+Use project_brief for project "my-project1" with max_items=20.
+```
+
+```text
+Use context_search for project "my-project1" with query "authentication flow" and k=8.
+```
+
+```text
+Use context_add for project "my-project1" with kind="summary", importance=5, content="Decision: ...".
+```
+
+Important summary:
+- You can be coding inside `/home/my-project1`.
+- But `make ...` commands are always executed in MCP folder (`luck-mpc`).
+- Tools are called in agent chat and should use consistent `project` value.
+
 ## 4) Initial setup (first time)
 Run exactly in this order:
 

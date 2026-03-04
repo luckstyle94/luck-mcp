@@ -46,6 +46,21 @@ Importante:
 - O `ROOT` aponta para o projeto que voce quer indexar (ex.: `/home/$USER/repo/private/meu-api`).
 - As tools (`context_add`, `context_search`, `project_brief`) sao usadas no chat do agent.
 
+### Exemplo direto com `/home/meu-projeto1`
+Terminal (sempre no repo MCP):
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make up
+make index PROJECT=meu-projeto1 ROOT=/home/meu-projeto1
+```
+
+No chat da IA:
+```text
+Use project_brief no projeto "meu-projeto1" com max_items=20.
+Use context_search no projeto "meu-projeto1" com query "auth" e k=8.
+Use context_add no projeto "meu-projeto1" com kind="summary", importance=5, content="Decisao: ...".
+```
+
 ## 1) Primeira configuracao
 
 ```bash
