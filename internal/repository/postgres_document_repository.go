@@ -188,6 +188,90 @@ LIMIT $2`
 	return items, nil
 }
 
+func (r *PostgresDocumentRepository) ListIndexedFiles(ctx context.Context, project string) ([]IndexedFile, error) {
+	const q = `
+SELECT path, content_hash
+FROM indexed_files
+WHERE project = $1
+  AND status = 'indexed'`
+
+	rows, err := r.db.QueryContext(ctx, q, project)
+	if err != nil {
+		return nil, fmt.Errorf("list indexed files: %w", err)
+	}
+	defer rows.Close()
+
+	files := make([]IndexedFile, 0)
+	for rows.Next() {
+		var f IndexedFile
+		if err := rows.Scan(&f.Path, &f.ContentHash); err != nil {
+			return nil, fmt.Errorf("scan indexed file: %w", err)
+		}
+		files = append(files, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate indexed files rows: %w", err)
+	}
+	return files, nil
+}
+
+func (r *PostgresDocumentRepository) UpsertIndexedFile(ctx context.Context, input UpsertIndexedFileInput) error {
+	const q = `
+INSERT INTO indexed_files (project, path, content_hash, chunk_count, status, error, indexed_at)
+VALUES ($1, $2, $3, $4, $5, $6, NOW())
+ON CONFLICT (project, path)
+DO UPDATE SET
+	content_hash = EXCLUDED.content_hash,
+	chunk_count = EXCLUDED.chunk_count,
+	status = EXCLUDED.status,
+	error = EXCLUDED.error,
+	indexed_at = NOW()`
+
+	if _, err := r.db.ExecContext(
+		ctx,
+		q,
+		input.Project,
+		input.Path,
+		input.ContentHash,
+		input.ChunkCount,
+		input.Status,
+		input.Error,
+	); err != nil {
+		return fmt.Errorf("upsert indexed file: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresDocumentRepository) DeleteIndexedFile(ctx context.Context, project, path string) error {
+	const q = `
+DELETE FROM indexed_files
+WHERE project = $1 AND path = $2`
+	if _, err := r.db.ExecContext(ctx, q, project, path); err != nil {
+		return fmt.Errorf("delete indexed file: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresDocumentRepository) DeleteAutoChunksByPath(ctx context.Context, project, path string) (int64, error) {
+	const q = `
+DELETE FROM documents d
+WHERE
+	d.project = $1
+	AND d.path = $2
+	AND d.kind = 'chunk'
+	AND COALESCE(d.tags, ARRAY[]::text[]) @> $3::text[]`
+
+	res, err := r.db.ExecContext(ctx, q, project, path, pq.Array([]string{AutoIndexTag}))
+	if err != nil {
+		return 0, fmt.Errorf("delete auto chunks by path: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected auto chunks delete: %w", err)
+	}
+	return affected, nil
+}
+
 func toVectorLiteral(values []float64) string {
 	if len(values) == 0 {
 		return "[]"

@@ -8,6 +8,53 @@
 - English (full): [README.en.md](./README.en.md)
 - English (quickstart): [QUICKSTART.en.md](./QUICKSTART.en.md)
 
+## Daily Cheatsheet (copy and use)
+Always run commands in terminal, inside the MCP folder:
+
+```bash
+cd /home/$USER/repo/private/luck-mpc
+```
+
+1. When you start your day/project:
+```bash
+make up
+make migrate
+make index PROJECT=my-project ROOT=/absolute/path/to/project
+```
+
+2. During work (in AI chat, not in terminal):
+- Session start: ask `project_brief` for `my-project`
+- Before sensitive changes: ask `context_search`
+- After important decisions: ask `context_add` with `kind="summary"` and `importance=5`
+
+3. If you changed a lot of code and want fresh context:
+```bash
+make index PROJECT=my-project ROOT=/absolute/path/to/project
+```
+
+4. If you want a full rebuild for this project:
+```bash
+make index-full PROJECT=my-project ROOT=/absolute/path/to/project
+```
+
+5. End of day (optional):
+```bash
+make down
+```
+
+## What each command means (plain language)
+- `make up`: starts containers (Postgres, Ollama, MCP). Use when starting work.
+- `make migrate`: updates database schema. Use on first setup and whenever new migrations are added.
+- `make index PROJECT=... ROOT=...`: incremental indexing. Reprocesses only new/changed files and removes indexed data for deleted files. Use at start of day and after large code changes.
+- `make index-full PROJECT=... ROOT=...`: full reindex. Reprocesses all files for the selected project. Use when you want to rebuild context from scratch.
+- `make down`: stops containers. Use at end of day (optional).
+- `docker compose build mcp`: rebuilds MCP image. Use when you changed code in this MCP repository.
+- `docker compose exec ollama ollama pull nomic-embed-text`: downloads/updates embedding model. Use first time or when model is missing.
+
+Quick definitions:
+- `incremental index`: updates only what changed (faster for daily use).
+- `full reindex`: rebuilds all indexed project memory (slower, maintenance/reset use).
+
 ## 1) What this project does (simple explanation)
 This project provides a local MCP server to store and retrieve working context.
 
@@ -42,34 +89,50 @@ You need:
 
 You do not need to install Postgres or Ollama manually.
 
+## 3.1) Where to run each command (very important)
+Run setup and maintenance commands in your local terminal, inside this MCP repository:
+
+```bash
+cd /home/$USER/repo/private/luck-mpc
+```
+
+Practical rules:
+- `make up`, `make down`, `make migrate`, `make index`, `make index-full`: run from `luck-mpc`.
+- `ROOT` in `make index`: absolute path of the project you want to index (Go, Python, Terraform, React, etc.).
+- MCP tools (`context_add`, `context_search`, `project_brief`) are used in your agent chat (Cursor/Codex/Claude), not in terminal.
+- You do not need to manually enter containers for normal usage.
+
 ## 4) Initial setup (first time)
 Run exactly in this order:
 
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
 make migrate
 docker compose exec ollama ollama pull nomic-embed-text
+make index PROJECT=my-project ROOT=/absolute/path/to/repo
 ```
 
 What each command does:
 1. `build mcp`: builds the local MCP server image.
 2. `up -d postgres ollama mcp`: starts database, embeddings service, and base MCP container.
-3. `make migrate`: applies DB schema (`0001`, `0002`, `0003`).
+3. `make migrate`: applies DB schema (`0001`, `0002`, `0003`, `0004`).
 4. `ollama pull`: downloads the embedding model.
+5. `make index`: runs the first automatic indexing for the project.
 
 ## 5) Daily routine (normal usage)
 ### Start environment at the beginning of the day
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 docker compose up -d postgres ollama mcp
+make index PROJECT=my-project ROOT=/absolute/path/to/repo
 ```
 
 ### Stop environment at the end of the day
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 docker compose down
 ```
 
@@ -81,8 +144,27 @@ Run it when:
 
 Command:
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 make migrate
+```
+
+### How automatic indexing works
+`make index` scans text files from your project (Go, Python, Terraform, Ansible, React, Markdown, SQL, etc.), creates embeddings, and stores chunks as `kind=chunk`.
+
+Main behavior:
+- indexes by `project` (each project is isolated in the database)
+- default mode is `changed`: only new/changed files are reindexed
+- automatically removes chunks for deleted files
+- ignores binaries, secrets (`.env*`, keys), and large files (>1MB)
+
+Recommended daily command:
+```bash
+make index PROJECT=my-project ROOT=/absolute/path/to/repo
+```
+
+When you need a full rebuild:
+```bash
+make index-full PROJECT=my-project ROOT=/absolute/path/to/repo
 ```
 
 ## 6) Configure in Cursor (recommended)
@@ -135,6 +217,24 @@ Available tools:
 - `context_add`
 - `context_search`
 - `project_brief`
+
+### 8.0 Simple daily flow (beginner-friendly)
+1. In terminal, inside `luck-mpc`, run:
+```bash
+make up
+make migrate
+make index PROJECT=my-project ROOT=/absolute/path/to/project
+```
+2. In Cursor (or another agent), start session by asking:
+- `project_brief` for `my-project`
+3. Before coding in sensitive areas:
+- run `context_search` with an objective query
+4. When you make an important decision:
+- run `context_add` with `kind=summary` and high `importance`
+5. End of day (optional):
+```bash
+make down
+```
 
 ### 8.1 Recommended workflow
 1. Session start:
@@ -266,6 +366,16 @@ Apply migrations:
 make migrate
 ```
 
+Index project (incremental):
+```bash
+make index PROJECT=my-project ROOT=/absolute/path/to/repo
+```
+
+Full reindex:
+```bash
+make index-full PROJECT=my-project ROOT=/absolute/path/to/repo
+```
+
 Download model:
 ```bash
 docker compose exec ollama ollama pull nomic-embed-text
@@ -297,6 +407,7 @@ docker compose down
 │  ├─ db/
 │  ├─ domain/
 │  ├─ embeddings/
+│  ├─ indexer/
 │  ├─ repository/
 │  ├─ service/
 │  └─ transport/mcp/
@@ -307,6 +418,8 @@ docker compose down
 │  ├─ 0002_dedupe_index.down.sql
 │  ├─ 0003_dedupe_existing_hashes.up.sql
 │  └─ 0003_dedupe_existing_hashes.down.sql
+│  ├─ 0004_indexed_files.up.sql
+│  └─ 0004_indexed_files.down.sql
 ├─ docker-compose.yml
 ├─ Dockerfile
 ├─ Makefile

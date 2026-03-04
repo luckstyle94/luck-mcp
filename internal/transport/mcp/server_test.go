@@ -38,6 +38,22 @@ func (s *stubRepository) ListBriefItems(_ context.Context, _ string, _ int) ([]d
 	}}, nil
 }
 
+func (s *stubRepository) ListIndexedFiles(_ context.Context, _ string) ([]repository.IndexedFile, error) {
+	return nil, nil
+}
+
+func (s *stubRepository) UpsertIndexedFile(_ context.Context, _ repository.UpsertIndexedFileInput) error {
+	return nil
+}
+
+func (s *stubRepository) DeleteIndexedFile(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (s *stubRepository) DeleteAutoChunksByPath(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
 type stubEmbeddings struct{}
 
 func (s *stubEmbeddings) Embed(_ context.Context, _ string) ([]float64, error) {
