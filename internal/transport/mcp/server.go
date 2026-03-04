@@ -145,7 +145,7 @@ func (s *Server) handleRequest(ctx context.Context, req rpcRequest) rpcResponse 
 
 func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse {
 	var params toolCallParams
-	if err := decodeJSON(req.Params, &params); err != nil {
+	if err := decodeJSONLoose(req.Params, &params); err != nil {
 		return invalidParams(req.ID, err)
 	}
 
@@ -172,7 +172,7 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 	switch toolName {
 	case "context_add":
 		var in service.AddContextInput
-		if err := decodeJSON(args, &in); err != nil {
+		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
 		id, err := s.service.AddContext(ctx, in)
@@ -183,7 +183,7 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 
 	case "context_search":
 		var in service.SearchContextInput
-		if err := decodeJSON(args, &in); err != nil {
+		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
 		results, err := s.service.SearchContext(ctx, in)
@@ -194,7 +194,7 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 
 	case "project_brief":
 		var in service.ProjectBriefInput
-		if err := decodeJSON(args, &in); err != nil {
+		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
 		brief, err := s.service.ProjectBrief(ctx, in)
@@ -207,7 +207,14 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 	}
 }
 
-func decodeJSON(raw json.RawMessage, out any) error {
+func decodeJSONLoose(raw json.RawMessage, out any) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	return json.Unmarshal(raw, out)
+}
+
+func decodeJSONStrict(raw json.RawMessage, out any) error {
 	if len(raw) == 0 {
 		return nil
 	}

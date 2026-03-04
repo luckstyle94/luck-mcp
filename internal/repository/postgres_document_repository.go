@@ -50,6 +50,8 @@ func (r *PostgresDocumentRepository) InsertDocumentWithEmbedding(ctx context.Con
 	const insertDoc = `
 INSERT INTO documents (project, kind, path, tags, content, importance, content_hash)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (project, content_hash) WHERE content_hash IS NOT NULL
+DO UPDATE SET updated_at = NOW()
 RETURNING id`
 
 	var id int64
@@ -69,7 +71,8 @@ RETURNING id`
 
 	const insertEmbedding = `
 INSERT INTO doc_embeddings (doc_id, embedding)
-VALUES ($1, $2::vector)`
+VALUES ($1, $2::vector)
+ON CONFLICT (doc_id) DO NOTHING`
 
 	if _, err := tx.ExecContext(ctx, insertEmbedding, id, toVectorLiteral(input.Embedding)); err != nil {
 		return 0, fmt.Errorf("insert document embedding: %w", err)
@@ -88,8 +91,8 @@ func (r *PostgresDocumentRepository) Search(ctx context.Context, input SearchDoc
 	argPos := 3
 
 	if input.PathPrefix != nil && strings.TrimSpace(*input.PathPrefix) != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("d.path LIKE $%d", argPos))
-		args = append(args, strings.TrimSpace(*input.PathPrefix)+"%")
+		whereClauses = append(whereClauses, fmt.Sprintf("d.path IS NOT NULL AND left(d.path, char_length($%d)) = $%d", argPos, argPos))
+		args = append(args, strings.TrimSpace(*input.PathPrefix))
 		argPos++
 	}
 

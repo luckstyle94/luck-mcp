@@ -57,9 +57,13 @@ Servicos do `docker-compose.yml`:
 
 Migrations:
 
-- o `postgres` aplica `migrations/0001_init.up.sql` automaticamente no primeiro start do volume (`docker-entrypoint-initdb.d`)
-- para reaplicar manualmente no banco ja existente, use `make migrate`
+- o `postgres` aplica automaticamente, no primeiro start do volume, os scripts:
+  - `migrations/0001_init.up.sql`
+  - `migrations/0002_dedupe_index.up.sql`
+  - `migrations/0003_dedupe_existing_hashes.up.sql`
+- para reaplicar manualmente no banco ja existente, use `make migrate` (executa todos os `*.up.sql`)
 - se precisar reinicializar do zero via init script, remova o volume `pgdata` antes de subir novamente
+- em upgrades de bases antigas, a `0003` remove duplicados por `(project, content_hash)` mantendo o registro mais recente
 
 Volumes persistentes:
 
@@ -118,6 +122,7 @@ go build -o mcp-server ./cmd/mcp-server
 - confira logs do processo MCP (stdout/stderr da integracao)
 - busque chamadas para `tools/list` e `tools/call`
 - valide inserts no banco (`documents`, `doc_embeddings`)
+- o servidor tolera `_meta` e outros campos extras no envelope de `tools/call` para compatibilidade entre clients
 
 ## 7) Como usar no VSCode
 Cenarios comuns:
@@ -271,6 +276,10 @@ Como evitar virar “lixao”:
 ├─ migrations/
 │  ├─ 0001_init.up.sql
 │  └─ 0001_init.down.sql
+│  ├─ 0002_dedupe_index.up.sql
+│  └─ 0002_dedupe_index.down.sql
+│  ├─ 0003_dedupe_existing_hashes.up.sql
+│  └─ 0003_dedupe_existing_hashes.down.sql
 ├─ docker-compose.yml
 ├─ Dockerfile
 ├─ Makefile
@@ -289,7 +298,7 @@ Como evitar virar “lixao”:
 - `DATABASE_URL` (obrigatorio)
 - `OLLAMA_URL` (default `http://ollama:11434`)
 - `OLLAMA_EMBED_MODEL` (default `nomic-embed-text`)
-- `MCP_PROJECT_DEFAULT` (opcional)
+- `MCP_PROJECT_DEFAULT` (opcional, usado quando `project` nao for enviado nas tools)
 - `LOG_LEVEL` (default `info`)
 
 ## Observacao sobre dimensao do vetor

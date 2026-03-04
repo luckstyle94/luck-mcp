@@ -34,6 +34,7 @@ type toolsListResult struct {
 type toolCallParams struct {
 	Name      string          `json:"name,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 
 	// Alias legacy/minimal compat.
 	Tool string          `json:"tool,omitempty"`

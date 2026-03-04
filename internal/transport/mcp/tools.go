@@ -15,7 +15,7 @@ func toolDefinitions() []toolDefinition {
 					"content":    map[string]any{"type": "string"},
 					"importance": map[string]any{"type": "integer", "minimum": 0, "maximum": 5},
 				},
-				"required": []string{"project", "kind", "content"},
+				"required": []string{"kind", "content"},
 			},
 		},
 		{
@@ -31,7 +31,7 @@ func toolDefinitions() []toolDefinition {
 					"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 					"kind":        map[string]any{"type": "string", "enum": []string{"note", "chunk", "summary", "memory", "any"}},
 				},
-				"required": []string{"project", "query"},
+				"required": []string{"query"},
 			},
 		},
 		{
@@ -43,7 +43,7 @@ func toolDefinitions() []toolDefinition {
 					"project":   map[string]any{"type": "string"},
 					"max_items": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 				},
-				"required": []string{"project"},
+				"required": []string{},
 			},
 		},
 	}

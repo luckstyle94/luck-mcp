@@ -16,7 +16,7 @@ fmt:
 	@if command -v goimports >/dev/null 2>&1; then goimports -w $(GOFILES); else echo "goimports nao encontrado, pulando"; fi
 
 migrate:
-	docker compose exec -T postgres psql -U mcp -d mcp -f /migrations/0001_init.up.sql
+	docker compose exec -T postgres sh -lc 'set -e; for f in /migrations/*.up.sql; do psql -U mcp -d mcp -f "$$f"; done'
 
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint nao encontrado, pulando"; fi
