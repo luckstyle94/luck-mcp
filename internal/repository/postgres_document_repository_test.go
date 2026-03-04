@@ -113,3 +113,70 @@ func TestSearch_WithFilters(t *testing.T) {
 		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
+
+func TestListIndexedFiles_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewPostgresDocumentRepository(db)
+
+	rows := sqlmock.NewRows([]string{"path", "content_hash"}).
+		AddRow("internal/auth/service.go", "hash1").
+		AddRow("README.md", "hash2")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+SELECT path, content_hash
+FROM indexed_files
+WHERE project = $1
+  AND status = 'indexed'`)).
+		WithArgs("proj-x").
+		WillReturnRows(rows)
+
+	got, err := repo.ListIndexedFiles(context.Background(), "proj-x")
+	if err != nil {
+		t.Fatalf("ListIndexedFiles returned error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(got))
+	}
+	if got[0].Path != "internal/auth/service.go" || got[0].ContentHash != "hash1" {
+		t.Fatalf("unexpected first row: %+v", got[0])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestDeleteAutoChunksByPath_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewPostgresDocumentRepository(db)
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+DELETE FROM documents d
+WHERE
+	d.project = $1
+	AND d.path = $2
+	AND d.kind = 'chunk'
+	AND COALESCE(d.tags, ARRAY[]::text[]) @> $3::text[]`)).
+		WithArgs("proj-x", "internal/auth/service.go", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+
+	deleted, err := repo.DeleteAutoChunksByPath(context.Background(), "proj-x", "internal/auth/service.go")
+	if err != nil {
+		t.Fatalf("DeleteAutoChunksByPath returned error: %v", err)
+	}
+	if deleted != 3 {
+		t.Fatalf("expected 3 deleted rows, got %d", deleted)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}

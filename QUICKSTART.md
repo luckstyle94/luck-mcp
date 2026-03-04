@@ -2,15 +2,75 @@
 
 Guia rapido para colocar o MCP no ar e usar no Cursor em poucos minutos.
 
+## Cheatsheet diario (resumo de 30s)
+1. Abrir o dia:
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make up
+make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
+```
+
+2. Trabalhar com IA (no chat):
+- `project_brief` no inicio da sessao
+- `context_search` antes de mexer em partes criticas
+- `context_add` depois de decisoes importantes
+
+3. Fechar o dia (opcional):
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make down
+```
+
+## O que e index, reindex e incremental?
+- `make index`: atualiza contexto automaticamente so do que mudou (arquivos novos/alterados/removidos). Esse e o comando do dia a dia.
+- `make index-full`: refaz toda a indexacao do projeto do zero. Use quando quiser reconstruir tudo.
+- `incremental`: significa "somente diferencas". Mais rapido.
+- `reindex completo`: significa "todos os arquivos novamente". Mais lento.
+
+Quando usar cada comando:
+- Comecou a trabalhar: `make up` + `make index ...`
+- Entrou migration nova: `make migrate`
+- Mudou muito codigo: `make index ...`
+- Quer resetar contexto indexado: `make index-full ...`
+- Terminou o dia: `make down` (opcional)
+
+## 0) Onde rodar os comandos
+Rode todos os comandos abaixo no seu terminal local, dentro da pasta do MCP:
+
+```bash
+cd /home/$USER/repo/private/luck-mpc
+```
+
+Importante:
+- `make index` sempre roda aqui no `luck-mpc`.
+- O `ROOT` aponta para o projeto que voce quer indexar (ex.: `/home/$USER/repo/private/meu-api`).
+- As tools (`context_add`, `context_search`, `project_brief`) sao usadas no chat do agent.
+
+### Exemplo direto com `/home/meu-projeto1`
+Terminal (sempre no repo MCP):
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make up
+make index PROJECT=meu-projeto1 ROOT=/home/meu-projeto1
+```
+
+No chat da IA:
+```text
+Use project_brief no projeto "meu-projeto1" com max_items=20.
+Use context_search no projeto "meu-projeto1" com query "auth" e k=8.
+Use context_add no projeto "meu-projeto1" com kind="summary", importance=5, content="Decisao: ...".
+```
+
 ## 1) Primeira configuracao
 
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
 make migrate
 docker compose exec ollama ollama pull nomic-embed-text
+make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
 ## 2) Configurar no Cursor
@@ -44,20 +104,28 @@ Depois:
 
 ### Iniciar no comeco do dia
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 docker compose up -d postgres ollama mcp
+make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
 ### Parar no fim do dia
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 docker compose down
 ```
 
 ### Quando rodar migrate
 ```bash
-cd /home/luckstyle/repo/private/luck-mpc
+cd /home/$USER/repo/private/luck-mpc
 make migrate
+```
+
+### Quando rodar index-full
+Use quando quiser reconstruir toda a base de contexto do projeto:
+```bash
+cd /home/$USER/repo/private/luck-mpc
+make index-full PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
 ## 4) Prompts prontos para usar com a IA
