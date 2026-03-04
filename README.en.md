@@ -1,5 +1,7 @@
 # luck-mpc: persistent memory for AI agents via MCP
 
+## THIS PROJECT WAS 100% CREATED USING AI (CODEX 5.3)
+
 ## Language Versions
 - Portuguese (full): [README.md](./README.md)
 - Portuguese (quickstart): [QUICKSTART.md](./QUICKSTART.md)

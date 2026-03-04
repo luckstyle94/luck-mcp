@@ -1,5 +1,7 @@
 # luck-mpc: memoria persistente para agents de IA via MCP
 
+## PROJETO 100% CRIADO UTILIZANDO IA (CODEX 5.3)
+
 ## Versoes de documentacao
 - Portugues (guia completo): [README.md](./README.md)
 - Portugues (quickstart): [QUICKSTART.md](./QUICKSTART.md)
