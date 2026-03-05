@@ -109,10 +109,11 @@ type Service struct {
 }
 
 type sourceFile struct {
-	Path    string
-	Hash    string
-	Content string
-	Tags    []string
+	Path     string
+	Hash     string
+	Content  string
+	Tags     []string
+	Warnings []string
 }
 
 func NewService(repo repository.DocumentRepository, emb embeddings.Client, expectedEmbedding int, logger *slog.Logger) *Service {
@@ -188,6 +189,17 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			return nil
 		}
 
+		safeContent, replacedInvalid := sanitizeToValidUTF8(contentBytes)
+		if strings.TrimSpace(safeContent) == "" {
+			result.SkippedFiles++
+			s.logger.Warn("skipping file with empty content after utf8 sanitization",
+				slog.String("project", opts.Project),
+				slog.String("path", relPath),
+				slog.Int("size", len(contentBytes)),
+			)
+			return nil
+		}
+
 		fileHash := hashBytes(contentBytes)
 		currentHashes[relPath] = fileHash
 
@@ -198,11 +210,17 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			}
 		}
 
+		warnings := make([]string, 0, 1)
+		if replacedInvalid > 0 {
+			warnings = append(warnings, fmt.Sprintf("sanitized_utf8_invalid_bytes=%d", replacedInvalid))
+		}
+
 		toIndex = append(toIndex, sourceFile{
-			Path:    relPath,
-			Hash:    fileHash,
-			Content: string(contentBytes),
-			Tags:    buildAutoTags(relPath),
+			Path:     relPath,
+			Hash:     fileHash,
+			Content:  safeContent,
+			Tags:     buildAutoTags(relPath),
+			Warnings: warnings,
 		})
 		return nil
 	})
@@ -258,6 +276,16 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 		insertedChunks := 0
 		fileFailed := false
 		for idx, chunk := range chunks {
+			if !utf8.ValidString(chunk) {
+				chunk = strings.ToValidUTF8(chunk, " ")
+				file.Warnings = append(file.Warnings, fmt.Sprintf("chunk_%d_sanitized_invalid_utf8", idx))
+			}
+			chunk = strings.TrimSpace(chunk)
+			if chunk == "" {
+				file.Warnings = append(file.Warnings, fmt.Sprintf("chunk_%d_dropped_empty_after_sanitize", idx))
+				continue
+			}
+
 			embedding, err := s.embeddings.Embed(ctx, chunk)
 			if err != nil {
 				result.FailedFiles++
@@ -355,6 +383,13 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			slog.Int("tags_count", len(file.Tags)),
 			slog.Int("size", len(file.Content)),
 		)
+		for _, warn := range file.Warnings {
+			s.logger.Warn("file indexed with warning",
+				slog.String("project", opts.Project),
+				slog.String("path", file.Path),
+				slog.String("warning", warn),
+			)
+		}
 	}
 
 	if firstErr != nil {
@@ -498,6 +533,29 @@ func isLikelyText(content []byte) bool {
 	return float64(invalid)/float64(total) < 0.1
 }
 
+func sanitizeToValidUTF8(content []byte) (string, int) {
+	if len(content) == 0 {
+		return "", 0
+	}
+	invalidBytes := countInvalidUTF8Bytes(content)
+	if invalidBytes == 0 {
+		return string(content), 0
+	}
+	return strings.ToValidUTF8(string(content), " "), invalidBytes
+}
+
+func countInvalidUTF8Bytes(content []byte) int {
+	invalid := 0
+	for len(content) > 0 {
+		_, size := utf8.DecodeRune(content)
+		if size == 1 && content[0] >= 0x80 && !utf8.Valid(content[:1]) {
+			invalid++
+		}
+		content = content[size:]
+	}
+	return invalid
+}
+
 func splitContentIntoChunks(content string, size, overlap int) ([]string, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -513,22 +571,23 @@ func splitContentIntoChunks(content string, size, overlap int) ([]string, error)
 		return nil, errors.New("chunk overlap must be smaller than chunk size")
 	}
 
-	if len(content) <= size {
+	runes := []rune(content)
+	if len(runes) <= size {
 		return []string{content}, nil
 	}
 
 	step := size - overlap
-	chunks := make([]string, 0, (len(content)/step)+1)
-	for start := 0; start < len(content); start += step {
+	chunks := make([]string, 0, (len(runes)/step)+1)
+	for start := 0; start < len(runes); start += step {
 		end := start + size
-		if end > len(content) {
-			end = len(content)
+		if end > len(runes) {
+			end = len(runes)
 		}
-		chunk := strings.TrimSpace(content[start:end])
+		chunk := strings.TrimSpace(string(runes[start:end]))
 		if chunk != "" {
 			chunks = append(chunks, chunk)
 		}
-		if end == len(content) {
+		if end == len(runes) {
 			break
 		}
 	}
