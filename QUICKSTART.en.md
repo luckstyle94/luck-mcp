@@ -34,6 +34,37 @@ When to use each command:
 - Need to reset indexed context: `make index-full ...`
 - End of day: `make down` (optional)
 
+## Useful aliases (mcp-up, mcp-down, mcp-index, mcp-index-full)
+Create shortcuts:
+
+```bash
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+```
+
+Persist in bash:
+
+```bash
+cat <<'EOF' >> ~/.bashrc
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+EOF
+source ~/.bashrc
+```
+
+Usage:
+- `mcp-up`
+- `mcp-down`
+- `mcp-index`
+- `mcp-index-full`
+
+Important:
+- `mcp-index` and `mcp-index-full` use the current folder as project, so run them inside the repo you want to index.
+
 ## 0) Where to run commands
 Run all commands below in your local terminal, inside the MCP folder:
 

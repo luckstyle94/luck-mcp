@@ -55,6 +55,37 @@ Definicoes rapidas:
 - `index incremental`: atualiza so o que mudou (mais rapido para uso diario).
 - `reindex completo`: recria toda a memoria indexada daquele projeto (mais lento, usado em manutencao/correcao).
 
+## Aliases uteis (atalhos no terminal)
+Para facilitar uso diario, voce pode criar aliases:
+
+```bash
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+```
+
+Para salvar definitivamente no bash:
+
+```bash
+cat <<'EOF' >> ~/.bashrc
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+EOF
+source ~/.bashrc
+```
+
+Depois disso, no terminal:
+- `mcp-up` para subir os servicos
+- `mcp-down` para parar os servicos
+- `mcp-index` para indexar o projeto da pasta atual (`$PWD`)
+- `mcp-index-full` para reindexar completo o projeto da pasta atual
+
+Observacao:
+- rode `mcp-index` e `mcp-index-full` estando dentro da pasta do projeto que deseja indexar.
+
 ## 1) O que este projeto faz (explicacao simples)
 Este projeto cria um servidor MCP local para guardar e recuperar contexto de trabalho.
 
