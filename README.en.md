@@ -55,6 +55,37 @@ Quick definitions:
 - `incremental index`: updates only what changed (faster for daily use).
 - `full reindex`: rebuilds all indexed project memory (slower, maintenance/reset use).
 
+## Useful aliases (terminal shortcuts)
+To simplify daily usage, you can create aliases:
+
+```bash
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+```
+
+To persist in bash:
+
+```bash
+cat <<'EOF' >> ~/.bashrc
+alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
+alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
+alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+EOF
+source ~/.bashrc
+```
+
+Then use:
+- `mcp-up` to start services
+- `mcp-down` to stop services
+- `mcp-index` to index the current folder project (`$PWD`)
+- `mcp-index-full` to fully reindex the current folder project
+
+Note:
+- run `mcp-index` and `mcp-index-full` from inside the repository you want to index.
+
 ## 1) What this project does (simple explanation)
 This project provides a local MCP server to store and retrieve working context.
 
