@@ -61,8 +61,8 @@ Para facilitar uso diario, voce pode criar aliases:
 ```bash
 alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
 alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
-alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
 ```
 
 Para salvar definitivamente no bash:
@@ -71,8 +71,8 @@ Para salvar definitivamente no bash:
 cat <<'EOF' >> ~/.bashrc
 alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
 alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='(cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$(basename "$PWD")" ROOT="$PWD")'
-alias mcp-index-full='(cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$(basename "$PWD")" ROOT="$PWD")'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
 EOF
 source ~/.bashrc
 ```
