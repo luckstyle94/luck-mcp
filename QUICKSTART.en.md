@@ -11,7 +11,13 @@ make index PROJECT=my-project ROOT=/absolute/path/to/project
 ```
 
 2. Work with AI (in chat):
+- In Codex CLI, start with: `use codebase memory for this session`
 - `project_brief` at session start
+- `repo_register` if you want to save repo description and tags
+- `search_across_repos` to discover which repos contain the topic
+- `repo_find_files` to locate files and modules
+- `repo_find_docs` to locate README/ADR/docs
+- `repo_search` for topic or similar-logic search
 - `context_search` before touching critical areas
 - `context_add` after important decisions
 
@@ -33,6 +39,27 @@ When to use each command:
 - Large code changes: `make index ...`
 - Need to reset indexed context: `make index-full ...`
 - End of day: `make down` (optional)
+
+## Automatic usage in Codex
+Codex CLI can already use this MCP in a near-automatic way because there is a dedicated skill installed for it.
+
+Recommended session-start convention:
+```text
+use codebase memory for this session
+```
+
+What this skill does:
+- pulls relevant docs and files
+- uses `search_across_repos` for multi-repo impact/reuse
+- uses `project_brief` and `context_search` for memory
+- suggests `mcp-index` if the index looks stale
+
+Main repo layout:
+- `/home/luckstyle/repo/iac`: Terraform, highest priority
+- `/home/luckstyle/repo/lambda`: Lambdas, usually Python
+- `/home/luckstyle/repo/private`: personal repos
+
+For Terraform, Codex should follow newer repo patterns when relevant and can combine this MCP with the `vex-tf` skill.
 
 ## Useful aliases (mcp-up, mcp-down, mcp-index, mcp-index-full)
 Create shortcuts:
@@ -75,7 +102,7 @@ cd /home/$USER/repo/private/luck-mpc
 Important:
 - `make index` is always executed here in `luck-mpc`.
 - `ROOT` points to the project you want to index (example: `/home/$USER/repo/private/my-api`).
-- Tools (`context_add`, `context_search`, `project_brief`) are used in the agent chat.
+- Tools (`repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`) are used in the agent chat.
 
 ### Direct example with `/home/my-project1`
 Terminal (always in MCP repo):
@@ -87,6 +114,12 @@ make index PROJECT=my-project1 ROOT=/home/my-project1
 
 In AI chat:
 ```text
+Use codebase memory for this session.
+Use repo_register with name="my-project1", root_path="/home/my-project1", description="Short repo description", tags=["backend","auth"].
+Use search_across_repos with query="auth" and k=5.
+Use repo_find_files with repos=["my-project1"] query="auth" and k=10.
+Use repo_find_docs with repos=["my-project1"] query="architecture" and k=5.
+Use repo_search with repos=["my-project1"] query="auth" mode="hybrid" and k=8.
 Use project_brief for project "my-project1" with max_items=20.
 Use context_search for project "my-project1" with query "auth" and k=8.
 Use context_add for project "my-project1" with kind="summary", importance=5, content="Decision: ...".
@@ -129,7 +162,7 @@ Use this MCP configuration:
 Then:
 1. Save the configuration.
 2. Reload Window in Cursor.
-3. Check that tools are available: `context_add`, `context_search`, `project_brief`.
+3. Check that tools are available: `repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`.
 
 ## 3) Daily usage
 

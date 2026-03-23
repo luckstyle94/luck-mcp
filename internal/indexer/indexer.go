@@ -11,12 +11,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"luck-mpc/internal/domain"
 	"luck-mpc/internal/embeddings"
 	"luck-mpc/internal/repository"
 )
@@ -113,8 +113,37 @@ type sourceFile struct {
 	Hash     string
 	Content  string
 	Tags     []string
+	Signals  []repository.FileSignalInput
 	Warnings []string
 }
+
+var (
+	urlPattern             = regexp.MustCompile(`https?://[^\s"'` + "`" + `<>]+`)
+	endpointPattern        = regexp.MustCompile(`(?:/api/[A-Za-z0-9_./:-]+|/v[0-9]+/[A-Za-z0-9_./:-]+)`)
+	importQuotedPattern    = regexp.MustCompile(`(?m)(?:^|\s)(?:import|from|require|include)\s*(?:\(|)?\s*["']([^"']+)["']`)
+	terraformSourcePattern = regexp.MustCompile(`(?m)source\s*=\s*"([^"]+)"`)
+	envVarPattern          = regexp.MustCompile(`\b[A-Z][A-Z0-9_]{2,}\b`)
+	goPackagePattern       = regexp.MustCompile(`(?m)^package\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	goFuncPattern          = regexp.MustCompile(`(?m)^func\s+(?:\([^)]+\)\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	goTypePattern          = regexp.MustCompile(`(?m)^type\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:struct|interface|map|\[\]|chan|func|\*)`)
+	pythonDefPattern       = regexp.MustCompile(`(?m)^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	pythonClassPattern     = regexp.MustCompile(`(?m)^class\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	jsSymbolPattern        = regexp.MustCompile(`(?m)^(?:export\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)`)
+	reactFunctionPattern   = regexp.MustCompile(`(?m)^(?:export\s+(?:default\s+)?)?function\s+([A-Z][A-Za-z0-9_]*)\s*\(`)
+	reactConstPattern      = regexp.MustCompile(`(?m)^(?:export\s+(?:default\s+)?)?(?:const|let|var)\s+([A-Z][A-Za-z0-9_]*)\s*=\s*(?:\([^=]*\)\s*)?=>`)
+	reactHookPattern       = regexp.MustCompile(`\b(use[A-Z][A-Za-z0-9_]*)\b`)
+	reactRoutePattern      = regexp.MustCompile(`(?i)<Route[^>]+path=["']([^"']+)["']`)
+	routerMethodPattern    = regexp.MustCompile(`(?i)\b(?:router|app)\.(get|post|put|patch|delete|options|head)\(\s*["']([^"']+)["']`)
+	pythonRoutePattern     = regexp.MustCompile(`(?m)@\w+\.(get|post|put|patch|delete)\(\s*["']([^"']+)["']`)
+	axiosMethodPattern     = regexp.MustCompile(`(?i)\baxios\.(get|post|put|patch|delete|options|head)\(\s*["']([^"']+)["']`)
+	fetchPattern           = regexp.MustCompile(`(?i)\bfetch\(\s*["']([^"']+)["']`)
+	openAPIPathPattern     = regexp.MustCompile(`(?m)^\s{0,4}(/[^:\s]+):\s*$`)
+	ansibleRolePattern     = regexp.MustCompile(`(?m)^\s*-\s*(?:role|import_role|include_role):\s*([A-Za-z0-9_.-]+)\s*$`)
+	ansibleModulePattern   = regexp.MustCompile(`(?m)^\s{2,}([a-z_][a-z0-9_.]+):\s*$`)
+	ansibleHostsPattern    = regexp.MustCompile(`(?m)^\s*-\s*hosts:\s*([A-Za-z0-9_.,:-]+)\s*$`)
+	terraformBlockPattern  = regexp.MustCompile(`(?m)^(resource|data|module|variable|output|provider)\s+"([^"]+)"(?:\s+"([^"]+)")?`)
+	markdownHeadingPattern = regexp.MustCompile(`(?m)^#{1,6}\s+(.+)$`)
+)
 
 func NewService(repo repository.DocumentRepository, emb embeddings.Client, expectedEmbedding int, logger *slog.Logger) *Service {
 	if logger == nil {
@@ -134,13 +163,19 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 		return Result{}, err
 	}
 
-	knownFiles, err := s.repo.ListIndexedFiles(ctx, opts.Project)
+	rootPath := opts.RootPath
+	repoRecord, err := s.repo.EnsureRepo(ctx, opts.Project, &rootPath)
+	if err != nil {
+		return Result{}, fmt.Errorf("ensure repo: %w", err)
+	}
+
+	knownFiles, err := s.repo.ListIndexedFiles(ctx, repoRecord.ID)
 	if err != nil {
 		return Result{}, fmt.Errorf("list indexed files: %w", err)
 	}
-	indexedByPath := make(map[string]string, len(knownFiles))
+	indexedByPath := make(map[string]repository.IndexedFile, len(knownFiles))
 	for _, f := range knownFiles {
-		indexedByPath[f.Path] = f.ContentHash
+		indexedByPath[f.Path] = f
 	}
 
 	currentHashes := make(map[string]string)
@@ -204,7 +239,7 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 		currentHashes[relPath] = fileHash
 
 		if opts.Mode == "changed" {
-			if oldHash, ok := indexedByPath[relPath]; ok && oldHash == fileHash {
+			if oldFile, ok := indexedByPath[relPath]; ok && oldFile.ContentHash == fileHash && !shouldReindexIndexedFile(relPath, oldFile) {
 				result.UnchangedFiles++
 				return nil
 			}
@@ -220,6 +255,7 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			Hash:     fileHash,
 			Content:  safeContent,
 			Tags:     buildAutoTags(relPath),
+			Signals:  extractSignals(relPath, safeContent),
 			Warnings: warnings,
 		})
 		return nil
@@ -228,7 +264,7 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 		return result, fmt.Errorf("scan project files: %w", err)
 	}
 
-	deleted := s.removeMissingFiles(ctx, opts.Project, indexedByPath, currentHashes)
+	deleted := s.removeMissingFiles(ctx, repoRecord.ID, opts.Project, indexedByPath, currentHashes)
 	result.DeletedFiles = deleted
 
 	sort.Slice(toIndex, func(i, j int) bool {
@@ -243,8 +279,12 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			msg := err.Error()
 			_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 				Project:     opts.Project,
+				RepoID:      repoRecord.ID,
 				Path:        file.Path,
 				ContentHash: file.Hash,
+				Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+				FileType:    fileTypeFromPath(file.Path),
+				SizeBytes:   int64(len(file.Content)),
 				ChunkCount:  0,
 				Status:      "error",
 				Error:       &msg,
@@ -255,14 +295,18 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			continue
 		}
 
-		deletedRows, err := s.repo.DeleteAutoChunksByPath(ctx, opts.Project, file.Path)
+		deletedRows, err := s.repo.DeleteIndexedChunksByPath(ctx, repoRecord.ID, file.Path)
 		if err != nil {
 			result.FailedFiles++
 			msg := err.Error()
 			_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 				Project:     opts.Project,
+				RepoID:      repoRecord.ID,
 				Path:        file.Path,
 				ContentHash: file.Hash,
+				Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+				FileType:    fileTypeFromPath(file.Path),
+				SizeBytes:   int64(len(file.Content)),
 				ChunkCount:  0,
 				Status:      "error",
 				Error:       &msg,
@@ -293,8 +337,12 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 				msg := fmt.Sprintf("embedding failed on chunk %d: %v", idx, err)
 				_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 					Project:     opts.Project,
+					RepoID:      repoRecord.ID,
 					Path:        file.Path,
 					ContentHash: file.Hash,
+					Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+					FileType:    fileTypeFromPath(file.Path),
+					SizeBytes:   int64(len(file.Content)),
 					ChunkCount:  insertedChunks,
 					Status:      "error",
 					Error:       &msg,
@@ -310,8 +358,12 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 				msg := fmt.Sprintf("invalid embedding size %d (expected %d)", len(embedding), s.expectedEmbedding)
 				_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 					Project:     opts.Project,
+					RepoID:      repoRecord.ID,
 					Path:        file.Path,
 					ContentHash: file.Hash,
+					Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+					FileType:    fileTypeFromPath(file.Path),
+					SizeBytes:   int64(len(file.Content)),
 					ChunkCount:  insertedChunks,
 					Status:      "error",
 					Error:       &msg,
@@ -322,16 +374,14 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 				break
 			}
 
-			path := file.Path
 			chunkHash := hashString(strings.Join([]string{opts.Project, file.Path, strconv.Itoa(idx), chunk}, "\n"))
-			_, err = s.repo.InsertDocumentWithEmbedding(ctx, repository.AddDocumentInput{
-				Project:     opts.Project,
-				Kind:        domain.KindChunk,
-				Path:        &path,
+			_, err = s.repo.InsertIndexedChunkWithEmbedding(ctx, repository.AddIndexedChunkInput{
+				RepoID:      repoRecord.ID,
+				Path:        file.Path,
+				ChunkIndex:  idx,
 				Tags:        file.Tags,
 				Content:     chunk,
-				Importance:  1,
-				ContentHash: &chunkHash,
+				ContentHash: chunkHash,
 				Embedding:   embedding,
 			})
 			if err != nil {
@@ -340,8 +390,12 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 				msg := fmt.Sprintf("insert chunk %d failed: %v", idx, err)
 				_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 					Project:     opts.Project,
+					RepoID:      repoRecord.ID,
 					Path:        file.Path,
 					ContentHash: file.Hash,
+					Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+					FileType:    fileTypeFromPath(file.Path),
+					SizeBytes:   int64(len(file.Content)),
 					ChunkCount:  insertedChunks,
 					Status:      "error",
 					Error:       &msg,
@@ -358,10 +412,35 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 			continue
 		}
 
+		if err := s.repo.ReplaceFileSignals(ctx, repoRecord.ID, file.Path, file.Signals); err != nil {
+			result.FailedFiles++
+			msg := fmt.Sprintf("replace file signals failed: %v", err)
+			_ = s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
+				Project:     opts.Project,
+				RepoID:      repoRecord.ID,
+				Path:        file.Path,
+				ContentHash: file.Hash,
+				Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+				FileType:    fileTypeFromPath(file.Path),
+				SizeBytes:   int64(len(file.Content)),
+				ChunkCount:  insertedChunks,
+				Status:      "error",
+				Error:       &msg,
+			})
+			if firstErr == nil {
+				firstErr = fmt.Errorf("replace signals for %s: %w", file.Path, err)
+			}
+			continue
+		}
+
 		if err := s.repo.UpsertIndexedFile(ctx, repository.UpsertIndexedFileInput{
 			Project:     opts.Project,
+			RepoID:      repoRecord.ID,
 			Path:        file.Path,
 			ContentHash: file.Hash,
+			Language:    languageFromExt(strings.ToLower(filepath.Ext(file.Path))),
+			FileType:    fileTypeFromPath(file.Path),
+			SizeBytes:   int64(len(file.Content)),
 			ChunkCount:  insertedChunks,
 			Status:      "indexed",
 			Error:       nil,
@@ -399,7 +478,7 @@ func (s *Service) IndexProject(ctx context.Context, opts Options) (Result, error
 	return result, nil
 }
 
-func (s *Service) removeMissingFiles(ctx context.Context, project string, indexedByPath map[string]string, currentHashes map[string]string) int {
+func (s *Service) removeMissingFiles(ctx context.Context, repoID int64, project string, indexedByPath map[string]repository.IndexedFile, currentHashes map[string]string) int {
 	removed := 0
 	paths := make([]string, 0)
 	for path := range indexedByPath {
@@ -410,7 +489,7 @@ func (s *Service) removeMissingFiles(ctx context.Context, project string, indexe
 	sort.Strings(paths)
 
 	for _, path := range paths {
-		deletedRows, err := s.repo.DeleteAutoChunksByPath(ctx, project, path)
+		deletedRows, err := s.repo.DeleteIndexedChunksByPath(ctx, repoID, path)
 		if err != nil {
 			s.logger.Warn("failed to delete chunks for missing file",
 				slog.String("project", project),
@@ -419,8 +498,16 @@ func (s *Service) removeMissingFiles(ctx context.Context, project string, indexe
 			)
 			continue
 		}
-		if err := s.repo.DeleteIndexedFile(ctx, project, path); err != nil {
+		if err := s.repo.DeleteIndexedFile(ctx, repoID, path); err != nil {
 			s.logger.Warn("failed to delete indexed_file row",
+				slog.String("project", project),
+				slog.String("path", path),
+				slog.String("error", err.Error()),
+			)
+			continue
+		}
+		if err := s.repo.DeleteFileSignalsByPath(ctx, repoID, path); err != nil {
+			s.logger.Warn("failed to delete file signals row",
 				slog.String("project", project),
 				slog.String("path", path),
 				slog.String("error", err.Error()),
@@ -435,6 +522,36 @@ func (s *Service) removeMissingFiles(ctx context.Context, project string, indexe
 		)
 	}
 	return removed
+}
+
+func shouldReindexIndexedFile(path string, existing repository.IndexedFile) bool {
+	if existing.Status != "indexed" {
+		return true
+	}
+	if strings.TrimSpace(existing.ContentHash) == "" {
+		return true
+	}
+	if existing.ChunkCount <= 0 {
+		return true
+	}
+	if existing.SizeBytes <= 0 {
+		return true
+	}
+
+	expectedType := fileTypeFromPath(path)
+	if strings.TrimSpace(existing.FileType) == "" || existing.FileType == "unknown" || existing.FileType != expectedType {
+		return true
+	}
+
+	expectedLanguage := languageFromExt(strings.ToLower(filepath.Ext(path)))
+	if strings.TrimSpace(existing.Language) == "" {
+		return true
+	}
+	if expectedLanguage != "text" && existing.Language != expectedLanguage {
+		return true
+	}
+
+	return false
 }
 
 func normalizeOptions(opts Options) Options {
@@ -649,6 +766,239 @@ func languageFromExt(ext string) string {
 		return "config"
 	default:
 		return "text"
+	}
+}
+
+func fileTypeFromPath(path string) string {
+	base := strings.ToLower(filepath.Base(path))
+	ext := strings.ToLower(filepath.Ext(path))
+
+	switch {
+	case strings.HasPrefix(path, "docs/"), strings.Contains(path, "/docs/"), strings.HasPrefix(base, "readme"), strings.Contains(base, "adr"):
+		return "doc"
+	case strings.HasSuffix(base, "_test.go"), strings.HasSuffix(base, "_test.py"), strings.HasSuffix(base, ".spec.ts"), strings.HasSuffix(base, ".spec.tsx"), strings.HasSuffix(base, ".test.ts"), strings.HasSuffix(base, ".test.tsx"), strings.HasSuffix(base, ".test.js"), strings.HasSuffix(base, ".test.jsx"):
+		return "test"
+	case ext == ".tf" || ext == ".tfvars" || ext == ".hcl" || base == "terragrunt.hcl" || strings.Contains(path, "/terraform/") || strings.Contains(path, "/ansible/"):
+		return "infra"
+	case ext == ".yaml" || ext == ".yml" || ext == ".json" || ext == ".toml" || ext == ".ini" || ext == ".cfg" || ext == ".conf":
+		return "config"
+	case ext == ".md" || ext == ".mdx":
+		return "doc"
+	default:
+		return "code"
+	}
+}
+
+func extractSignals(path, content string) []repository.FileSignalInput {
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	out := make([]repository.FileSignalInput, 0, 24)
+	add := func(signalType, value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		normalized := strings.ToLower(value)
+		key := signalType + "\x00" + normalized
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, repository.FileSignalInput{
+			SignalType:      signalType,
+			Value:           value,
+			NormalizedValue: normalized,
+		})
+	}
+
+	for _, match := range urlPattern.FindAllString(content, 12) {
+		add("url", match)
+	}
+	for _, match := range endpointPattern.FindAllString(content, 12) {
+		add("endpoint", match)
+	}
+	for _, match := range importQuotedPattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 1 {
+			add("import_ref", match[1])
+		}
+	}
+	for _, match := range terraformSourcePattern.FindAllStringSubmatch(content, 12) {
+		if len(match) > 1 {
+			add("terraform_source", match[1])
+		}
+	}
+	for _, match := range envVarPattern.FindAllString(content, 20) {
+		add("env_var", match)
+	}
+	for _, match := range goPackagePattern.FindAllStringSubmatch(content, 4) {
+		if len(match) > 1 {
+			add("go_package", match[1])
+		}
+	}
+	for _, match := range goFuncPattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 1 {
+			add("go_func", match[1])
+		}
+	}
+	for _, match := range goTypePattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 1 {
+			add("go_type", match[1])
+		}
+	}
+	for _, match := range pythonDefPattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 1 {
+			add("py_def", match[1])
+		}
+	}
+	for _, match := range pythonClassPattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 1 {
+			add("py_class", match[1])
+		}
+	}
+	for _, match := range jsSymbolPattern.FindAllStringSubmatch(content, 20) {
+		if len(match) > 1 {
+			add("js_symbol", match[1])
+		}
+	}
+	if looksLikeReactFile(path, content) {
+		for _, match := range reactFunctionPattern.FindAllStringSubmatch(content, 20) {
+			if len(match) > 1 {
+				add("react_component", match[1])
+			}
+		}
+		for _, match := range reactConstPattern.FindAllStringSubmatch(content, 20) {
+			if len(match) > 1 {
+				add("react_component", match[1])
+			}
+		}
+		for _, match := range reactHookPattern.FindAllStringSubmatch(content, 24) {
+			if len(match) > 1 {
+				add("react_hook", match[1])
+			}
+		}
+		for _, match := range reactRoutePattern.FindAllStringSubmatch(content, 20) {
+			if len(match) > 1 {
+				add("route_path", match[1])
+				add("endpoint", match[1])
+			}
+		}
+	}
+	for _, match := range routerMethodPattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 2 {
+			method := strings.ToUpper(match[1])
+			pathValue := match[2]
+			add("http_route", method+" "+pathValue)
+			add("endpoint", pathValue)
+		}
+	}
+	for _, match := range pythonRoutePattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 2 {
+			method := strings.ToUpper(match[1])
+			pathValue := match[2]
+			add("http_route", method+" "+pathValue)
+			add("endpoint", pathValue)
+		}
+	}
+	for _, match := range axiosMethodPattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 2 {
+			method := strings.ToUpper(match[1])
+			pathValue := match[2]
+			add("http_client_call", method+" "+pathValue)
+			add("endpoint", pathValue)
+		}
+	}
+	for _, match := range fetchPattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 1 {
+			add("http_client_call", "FETCH "+match[1])
+			add("endpoint", match[1])
+		}
+	}
+	for _, match := range openAPIPathPattern.FindAllStringSubmatch(content, 24) {
+		if len(match) > 1 {
+			add("openapi_path", match[1])
+			add("endpoint", match[1])
+		}
+	}
+	if looksLikeAnsibleFile(path, content) {
+		for _, match := range ansibleRolePattern.FindAllStringSubmatch(content, 20) {
+			if len(match) > 1 {
+				add("ansible_role", match[1])
+			}
+		}
+		for _, match := range ansibleHostsPattern.FindAllStringSubmatch(content, 12) {
+			if len(match) > 1 {
+				add("ansible_hosts", match[1])
+			}
+		}
+		for _, match := range ansibleModulePattern.FindAllStringSubmatch(content, 32) {
+			if len(match) > 1 && !isIgnoredAnsibleKey(match[1]) {
+				add("ansible_module", match[1])
+			}
+		}
+	}
+	for _, match := range terraformBlockPattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 2 {
+			switch match[1] {
+			case "resource":
+				add("tf_resource", match[2]+":"+match[3])
+			case "data":
+				add("tf_data", match[2]+":"+match[3])
+			case "module":
+				add("tf_module", match[2])
+			case "variable":
+				add("tf_variable", match[2])
+			case "output":
+				add("tf_output", match[2])
+			case "provider":
+				add("tf_provider", match[2])
+			}
+		}
+	}
+	for _, match := range markdownHeadingPattern.FindAllStringSubmatch(content, 16) {
+		if len(match) > 1 {
+			add("doc_heading", match[1])
+		}
+	}
+
+	add("path_hint", path)
+
+	if len(out) == 0 {
+		return nil
+	}
+	if len(out) > 80 {
+		out = out[:80]
+	}
+	return out
+}
+
+func looksLikeReactFile(path, content string) bool {
+	lowerPath := strings.ToLower(path)
+	if strings.HasSuffix(lowerPath, ".tsx") || strings.HasSuffix(lowerPath, ".jsx") {
+		return true
+	}
+	return strings.Contains(content, "react") || strings.Contains(content, "<Route")
+}
+
+func looksLikeAnsibleFile(path, content string) bool {
+	lowerPath := strings.ToLower(path)
+	if !(strings.HasSuffix(lowerPath, ".yml") || strings.HasSuffix(lowerPath, ".yaml")) {
+		return false
+	}
+	if strings.Contains(lowerPath, "/ansible/") || strings.Contains(lowerPath, "/roles/") || strings.Contains(lowerPath, "playbook") {
+		return true
+	}
+	return strings.Contains(content, "\nhosts:") || strings.Contains(content, "ansible.builtin.") || strings.Contains(content, "\n  tasks:")
+}
+
+func isIgnoredAnsibleKey(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "name", "hosts", "vars", "tasks", "handlers", "when", "tags", "block", "rescue", "always", "notify", "register", "environment", "become", "delegate_to", "loop", "with_items":
+		return true
+	default:
+		return false
 	}
 }
 
