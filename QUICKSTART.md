@@ -28,7 +28,7 @@ make down
 ```
 
 ## O que e index, reindex e incremental?
-- `make index`: atualiza contexto automaticamente so do que mudou (arquivos novos/alterados/removidos). Esse e o comando do dia a dia.
+- `make index`: atualiza contexto automaticamente so do que mudou (arquivos novos/alterados/removidos). Esse e o comando do dia a dia e ja aplica migrations antes de indexar.
 - `make index-full`: refaz toda a indexacao do projeto do zero. Use quando quiser reconstruir tudo.
 - `incremental`: significa "somente diferencas". Mais rapido.
 - `reindex completo`: significa "todos os arquivos novamente". Mais lento.

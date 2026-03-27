@@ -51,7 +51,7 @@ make down
 ## What each command means (plain language)
 - `make up`: starts containers (Postgres, Ollama, MCP). Use when starting work.
 - `make migrate`: updates database schema. Use on first setup and whenever new migrations are added.
-- `make index PROJECT=... ROOT=...`: incremental indexing. Reprocesses only new/changed files and removes indexed data for deleted files. Use at start of day and after large code changes.
+- `make index PROJECT=... ROOT=...`: incremental indexing. Reprocesses only new/changed files and removes indexed data for deleted files. Before indexing, it automatically applies migrations to the active database.
 - `make index-full PROJECT=... ROOT=...`: full reindex. Reprocesses all files for the selected project. Use when you want to rebuild context from scratch.
 - `make down`: stops containers. Use at end of day (optional).
 - `docker compose build mcp`: rebuilds MCP image. Use when you changed code in this MCP repository.
