@@ -77,7 +77,18 @@ use codebase memory for this session
 Essa frase ajuda a deixar o comportamento previsivel, mesmo quando a skill ja estiver instalada.
 
 ### Como instalar a skill do Codex
-Se a skill ainda nao estiver instalada, crie a pasta de skills do Codex e faça um link simbolico:
+Como este projeto e publico, o recomendado e:
+1. fazer um fork deste repositorio
+2. editar a skill para refletir sua estrutura de repositorios, prioridades e convenções
+3. so depois instalar a skill no Codex
+
+O que normalmente voce vai editar na skill:
+- raiz principal dos seus repositorios
+- grupos principais, como `iac/`, `lambda/`, `private/` ou equivalentes
+- quais tipos de repositorio merecem busca cross-repo mais cedo
+- exemplos e referencias internas que devem combinar com o seu ambiente
+
+Depois disso, crie a pasta de skills do Codex e faça um link simbolico:
 
 ```bash
 mkdir -p ~/.codex/skills
@@ -98,6 +109,14 @@ cp -R /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp/. ~/.codex/skills/
 - consulta memoria salva antes de mexer em area sensivel
 - salva decisoes importantes para reutilizar depois
 
+### Importante para quem vai publicar ou reutilizar
+Nao trate a skill incluida aqui como pronta para qualquer ambiente.
+Ela e um ponto de partida. O usuario deve ajustar a skill depois do fork para refletir:
+- nomes das pastas que usa
+- tipos de repositorio prioritarios
+- fluxo desejado de bootstrap
+- exemplos que fazem sentido na propria organizacao
+
 ## Organizacao sugerida dos repositorios
 Um layout comum e:
 
@@ -116,12 +135,12 @@ Comportamento esperado:
 - em repos `lambda/`, o MCP deve considerar relacao com infraestrutura criada por Terraform
 - em tarefas de validacao/review Terraform no Codex, faz sentido usar tambem a skill `vex-tf`
 
-Repos Terraform mais novos que devem servir como referencia de padrao quando relevantes:
-- `iac-intelliscan`
-- `iac-mkt-diagnostico-maturidade`
-- `iac-core-boundary`
-- `iac-core-vault`
-- `iac-mcp`
+Repos Terraform de referencia que devem servir como padrao quando relevantes:
+- `iac-exemplo-app`
+- `iac-exemplo-plataforma`
+- `iac-exemplo-seguranca`
+- `iac-exemplo-rede`
+- `iac-exemplo-mcp`
 
 Preferencia importante:
 - quando um modulo Terraform reutilizavel for indicado, prefira referencia via git source

@@ -77,7 +77,18 @@ use codebase memory for this session
 This makes behavior more predictable even when the skill is already installed.
 
 ### How to install the Codex skill
-If the skill is not installed yet, create the Codex skills folder and link this project's skill:
+Because this repository is public, the recommended path is:
+1. fork this repository
+2. edit the skill so it matches your own repository layout, priorities, and conventions
+3. only then install the skill in Codex
+
+What you will usually edit in the skill:
+- your main repository root
+- your main groups such as `iac/`, `lambda/`, `private/`, or equivalents
+- which repository types should trigger earlier cross-repo search
+- internal examples and references that should match your environment
+
+After that, create the Codex skills folder and link this project's skill:
 
 ```bash
 mkdir -p ~/.codex/skills
@@ -109,12 +120,12 @@ Expected behavior:
 - for `lambda/` repos, consider relationships with Terraform-managed infrastructure
 - for Terraform validation/review in Codex, it makes sense to also use the `vex-tf` skill
 
-Newer Terraform repos that should be treated as stronger pattern references when relevant:
-- `iac-intelliscan`
-- `iac-mkt-diagnostico-maturidade`
-- `iac-core-boundary`
-- `iac-core-vault`
-- `iac-mcp`
+Example Terraform repos that can be treated as stronger pattern references when relevant:
+- `iac-example-app`
+- `iac-example-platform`
+- `iac-example-security`
+- `iac-example-network`
+- `iac-example-mcp`
 
 Important preference:
 - when suggesting reusable Terraform modules, prefer git source references

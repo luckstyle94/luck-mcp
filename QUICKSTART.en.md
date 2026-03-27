@@ -55,6 +55,13 @@ What this skill does:
 - suggests `mcp-index` if the index looks stale
 
 ### How to install the skill
+Because this repository is public, the best approach is to fork it and adapt the skill before installing it.
+
+Edit at least:
+- your repository root
+- your main repository groups
+- internal examples and search priorities
+
 ```bash
 mkdir -p ~/.codex/skills
 ln -s /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp ~/.codex/skills/codebase-memory-mcp
