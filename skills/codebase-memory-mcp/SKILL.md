@@ -77,13 +77,13 @@ When the current repo is under `/home/$USER/repos/iac/`:
 5. never recommend local repo path references as the preferred Terraform module
    source
 
-Newer-pattern Terraform repos that should be followed as closely as possible:
+Example newer-pattern Terraform repos that may serve as references:
 
-- `iac-intelliscan`
-- `iac-mkt-diagnostico-maturidade`
-- `iac-core-boundary`
-- `iac-core-vault`
-- `iac-mcp`
+- `iac-example-app`
+- `iac-example-platform`
+- `iac-example-security`
+- `iac-example-network`
+- `iac-example-mcp`
 
 Treat these as strong pattern references when relevant.
 
