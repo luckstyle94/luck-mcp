@@ -1,15 +1,16 @@
 ---
 name: codebase-memory-mcp
 description: |
-  Default skill for day-to-day work inside repositories under /home/$USER/repos.
+  Default skill for day-to-day work inside repositories under /home/$USER/repo.
   Trigger whenever the user is exploring, editing, reviewing, debugging, or
   researching code in a repo, especially Terraform repos under iac/, Lambda
   repos under lambda/, and personal repos under private/. Automatically use the
   local luck-mcp tools for bootstrap, docs/files discovery, cross-repo impact,
-  and durable engineering memory. When the repo is Terraform-related, strongly
+  and durable engineering memory. Favor automatic MCP usage over asking the
+  user to remember tool names. When the repo is Terraform-related, strongly
   bias toward multi-repo search and also follow vex-tf guidance when validating
-  Terraform patterns. If MCP results look stale, tell the user to run mcp-index
-  in the target repo.
+  Terraform patterns. Treat mcp-index as a required user step at the start of
+  meaningful work and again after substantial changes or before wrapping up.
 ---
 
 # Codebase Memory MCP
@@ -21,11 +22,11 @@ spamming tools on trivial requests.
 ## Core Rule
 
 Treat the MCP as the default research layer for repository context inside
-`/home/$USER/repos`.
+`/home/$USER/repo`.
 
 Default assumption:
 
-- if the user is working in a repository under `/home/$USER/repos`, use
+- if the user is working in a repository under `/home/$USER/repo`, use
   codebase memory unless the task is trivial or the user explicitly says not to
 - at the beginning of the session, act as if the convention is:
   `use codebase memory for this session`
@@ -44,7 +45,7 @@ Do not wait for the user to remember tool names.
 The main repository root is:
 
 ```text
-/home/$USER/repos
+/home/$USER/repo
 ```
 
 Important groups:
@@ -60,7 +61,7 @@ Important groups:
 - `private/`
   Personal/private repositories.
 
-- other repos directly inside `/home/$USER/repos`
+- other repos directly inside `/home/$USER/repo`
   Still valid and may be relevant. Do not ignore them only because they are not
   inside `iac/`, `lambda/`, or `private/`.
 
@@ -68,7 +69,7 @@ Important groups:
 
 Terraform repositories are the most common and highest-priority use case.
 
-When the current repo is under `/home/$USER/repos/iac/`:
+When the current repo is under `/home/$USER/repo/iac/`:
 
 1. default to codebase memory usage early
 2. use `search_across_repos` more aggressively for impact and reuse
@@ -79,17 +80,17 @@ When the current repo is under `/home/$USER/repos/iac/`:
 
 Example newer-pattern Terraform repos that may serve as references:
 
-- `iac-example-app`
-- `iac-example-platform`
-- `iac-example-security`
-- `iac-example-network`
-- `iac-example-mcp`
+- `iac-core-vault`
+- `iac-cmdb`
+- `iac-core-guardduty`
+- `iac-core-boundary`
+- `iac-intelliscan`
 
 Treat these as strong pattern references when relevant.
 
 ## Lambda Bias
 
-When the current repo is under `/home/$USER/repos/lambda/`:
+When the current repo is under `/home/$USER/repo/lambda/`:
 
 1. assume Lambda/Terraform relationships may matter
 2. search `iac/` repos when infrastructure, permissions, triggers, queues,
@@ -102,20 +103,29 @@ When the current repo is under `/home/$USER/repos/lambda/`:
 
 When starting meaningful work in a repository:
 
-1. Infer the current repo name from the current working directory basename.
-2. If the repo is not obviously cataloged yet, call `repo_register` with:
+1. Tell the user to run `mcp-index` from inside the target repository at the
+   start of meaningful work unless they already did so recently in the current
+   session.
+2. Infer the current repo name from the current working directory basename.
+3. If the repo is not obviously cataloged yet, call `repo_register` with:
    - `name`: repo basename
    - `root_path`: current absolute repo path when known
    - keep description/tags minimal unless the user already gave them
-3. Bootstrap context in this order when the task is non-trivial:
+4. Bootstrap context in this order when the task is non-trivial:
    - `repo_find_docs` for README/ADR/docs
    - `repo_find_files` for obvious modules/areas
    - `project_brief` for curated memory
-4. If the repo looks like Terraform or the task has impact potential, also run
+5. If the repo looks like Terraform or the task has impact potential, also run
    `search_across_repos` early.
 
 Skip the full bootstrap only for very narrow requests where repo context is not
 needed.
+
+For beginner-facing interactions:
+
+- do the MCP discovery steps automatically instead of listing raw tool names
+- translate MCP findings into plain language before adding deeper technical detail
+- when reindex is needed, give the exact command and explain why in one sentence
 
 ## Tool Selection
 
@@ -202,8 +212,12 @@ Keep entries short and useful:
 
 ## When To Ask For Reindex
 
+Treat `mcp-index` as a required user action at the beginning of meaningful work
+and again after substantial code changes or before wrapping up work in the
+repository.
+
 If MCP results are sparse, obviously stale, or miss files that should exist,
-assume the repo may not be indexed yet.
+assume the repo may not be indexed yet or the latest changes were not indexed.
 
 Tell the user clearly to run, from inside the target repository:
 
@@ -222,6 +236,8 @@ Do not invent data when indexing is clearly stale.
 ## Guardrails
 
 - Do not call every MCP tool on every request.
+- Do not make the user remember MCP tool names when the skill can infer the
+  right MCP calls automatically.
 - Do not use semantic search first when the user is asking for an exact file,
   route, symbol, module, or resource.
 - Do not skip cross-repo search for Terraform/Lambda work when infrastructure
