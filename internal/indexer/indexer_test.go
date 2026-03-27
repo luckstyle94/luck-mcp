@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"luck-mpc/internal/repository"
+	"luck-mcp/internal/repository"
 )
 
 func TestSplitContentIntoChunks(t *testing.T) {

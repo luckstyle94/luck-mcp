@@ -24,7 +24,7 @@ migrate:
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint nao encontrado, pulando"; fi
 
-index:
+index: migrate
 	@if [ -z "$(PROJECT)" ]; then echo "PROJECT obrigatorio. Ex: make index PROJECT=meu-projeto ROOT=/caminho/do/repo"; exit 1; fi
 	@if [ -z "$(ROOT)" ]; then echo "ROOT obrigatorio. Ex: make index PROJECT=meu-projeto ROOT=/caminho/do/repo"; exit 1; fi
 	docker compose run --rm -T --no-deps \

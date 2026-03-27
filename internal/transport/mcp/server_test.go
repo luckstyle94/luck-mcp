@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"luck-mpc/internal/domain"
-	"luck-mpc/internal/repository"
-	"luck-mpc/internal/service"
+	"luck-mcp/internal/domain"
+	"luck-mcp/internal/repository"
+	"luck-mcp/internal/service"
 )
 
 type stubRepository struct{}

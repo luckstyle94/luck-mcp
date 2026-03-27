@@ -1,4 +1,4 @@
-module luck-mpc
+module luck-mcp
 
 go 1.23
 

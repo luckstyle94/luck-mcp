@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"luck-mpc/internal/service"
+	"luck-mcp/internal/service"
 )
 
 const (

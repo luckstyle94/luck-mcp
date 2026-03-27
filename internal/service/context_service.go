@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"luck-mpc/internal/domain"
-	"luck-mpc/internal/embeddings"
-	"luck-mpc/internal/repository"
+	"luck-mcp/internal/domain"
+	"luck-mcp/internal/embeddings"
+	"luck-mcp/internal/repository"
 )
 
 type ContextService struct {

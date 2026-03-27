@@ -28,7 +28,7 @@ make down
 ```
 
 ## What are index, reindex and incremental?
-- `make index`: updates context only for changes (new/modified/deleted files). This is the daily command.
+- `make index`: updates context only for changes (new/modified/deleted files). This is the daily command and it applies migrations before indexing.
 - `make index-full`: rebuilds indexing for the whole project from zero. Use when you want a full refresh.
 - `incremental`: means "only differences". Faster.
 - `full reindex`: means "all files again". Slower.
@@ -164,14 +164,14 @@ Use this MCP configuration:
 ```json
 {
   "mcpServers": {
-    "luck-mpc": {
+    "luck-mcp": {
       "command": "docker",
       "args": [
         "exec",
         "-e",
         "LOG_LEVEL=error",
         "-i",
-        "luck-mpc-server",
+        "luck-mcp-server",
         "/mcp-server"
       ]
     }
@@ -245,7 +245,7 @@ docker compose ps
 
 MCP logs:
 ```bash
-docker logs --tail=200 luck-mpc-server
+docker logs --tail=200 luck-mcp-server
 ```
 
 ## 6) If Cursor has issues (loading tools)

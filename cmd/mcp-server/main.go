@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"luck-mpc/internal/config"
-	"luck-mpc/internal/db"
-	"luck-mpc/internal/embeddings"
-	"luck-mpc/internal/indexer"
-	"luck-mpc/internal/repository"
-	"luck-mpc/internal/service"
-	"luck-mpc/internal/transport/mcp"
+	"luck-mcp/internal/config"
+	"luck-mcp/internal/db"
+	"luck-mcp/internal/embeddings"
+	"luck-mcp/internal/indexer"
+	"luck-mcp/internal/repository"
+	"luck-mcp/internal/service"
+	"luck-mcp/internal/transport/mcp"
 )
 
 func main() {
