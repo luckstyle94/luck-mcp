@@ -11,6 +11,8 @@ description: |
   bias toward multi-repo search and also follow vex-tf guidance when validating
   Terraform patterns. Treat mcp-index as a required user step at the start of
   meaningful work and again after substantial changes or before wrapping up.
+  When setup or readiness is unclear, prefer guiding the user through
+  `make health` before deeper diagnosis.
 ---
 
 # Codebase Memory MCP
@@ -18,6 +20,9 @@ description: |
 Use this skill by default for repository work when the local `luck-mcp` MCP is
 configured. The goal is to make MCP usage automatic and predictable without
 spamming tools on trivial requests.
+
+Act on behalf of the user. Do not ask which MCP tool to use when the next step
+can be inferred from the task and repository context.
 
 ## Core Rule
 
@@ -37,16 +42,24 @@ Use the MCP first for:
 - docs discovery
 - cross-repo discovery
 - saved engineering memory
+- indexed bootstrap context when curated memory does not exist
 
 Do not wait for the user to remember tool names.
 
+Bootstrap automatically for non-trivial work. Skip the full MCP bootstrap only
+for narrow edits, one-off commands, or questions that clearly do not need repo
+context.
+
 ## Repository Topology
 
-The main repository root is:
+The main repository root is usually:
 
 ```text
 /home/$USER/repo
 ```
+
+Adjust the root and repo group names to match the environment where this skill
+is installed.
 
 Important groups:
 
@@ -78,15 +91,9 @@ When the current repo is under `/home/$USER/repo/iac/`:
 5. never recommend local repo path references as the preferred Terraform module
    source
 
-Example newer-pattern Terraform repos that may serve as references:
-
-- `iac-core-vault`
-- `iac-cmdb`
-- `iac-core-guardduty`
-- `iac-core-boundary`
-- `iac-intelliscan`
-
-Treat these as strong pattern references when relevant.
+If the environment has known high-quality Terraform repos or modules, treat
+them as strong pattern references when relevant. Keep those examples in the
+local environment-specific skill, not in this generic template.
 
 ## Lambda Bias
 
@@ -107,24 +114,30 @@ When starting meaningful work in a repository:
    start of meaningful work unless they already did so recently in the current
    session.
 2. Infer the current repo name from the current working directory basename.
-3. If the repo is not obviously cataloged yet, call `repo_register` with:
+3. If setup/readiness is in doubt, tell the user to run `make health` before
+   spending time on deeper troubleshooting.
+4. Use `repo_register` only when you need to pre-register metadata or the repo
+   genuinely has not been indexed yet. Do not call it just to make reads work
+   after a successful `mcp-index`.
+   - reads like `project_brief` and `context_search` no longer auto-create repos
+   - if a read says the project is missing, the next step is `mcp-index` or
+     `repo_register`, not assuming the MCP will create it implicitly
+5. When you do call `repo_register`, use:
    - `name`: repo basename
    - `root_path`: current absolute repo path when known
    - keep description/tags minimal unless the user already gave them
-4. Bootstrap context in this order when the task is non-trivial:
+6. Bootstrap context in this order when the task is non-trivial:
    - `repo_find_docs` for README/ADR/docs
    - `repo_find_files` for obvious modules/areas
-   - `project_brief` for curated memory
-5. If the repo looks like Terraform or the task has impact potential, also run
+   - `project_brief` for curated memory first, with indexed docs/files as fallback
+7. If the repo looks like Terraform or the task has impact potential, also run
    `search_across_repos` early.
-
-Skip the full bootstrap only for very narrow requests where repo context is not
-needed.
 
 For beginner-facing interactions:
 
 - do the MCP discovery steps automatically instead of listing raw tool names
 - translate MCP findings into plain language before adding deeper technical detail
+- when setup is unclear, prefer `make health` as the first diagnostic step
 - when reindex is needed, give the exact command and explain why in one sentence
 
 ## Tool Selection
@@ -153,6 +166,8 @@ Use the tools like this:
 
 - `context_search`
   Use before touching sensitive areas when prior decisions/gotchas might exist.
+  If the project is reported as missing, guide the user to `mcp-index` or
+  `repo_register` instead of assuming reads will create it.
 
 - `context_add`
   Use after durable technical decisions, gotchas, invariants, or recovery notes.
@@ -168,6 +183,9 @@ Default sequence:
 3. `project_brief`
 4. `context_search` only if the area is risky or historical decisions matter
 
+Use this by default for feature work, debugging, reviews, refactors, and
+onboarding inside one repo.
+
 ### For cross-repo or impact questions
 
 Default sequence:
@@ -175,6 +193,9 @@ Default sequence:
 1. `search_across_repos`
 2. `repo_find_files` or `repo_find_docs` in the top candidate repos
 3. `repo_search` for deeper implementation comparison where needed
+
+Use this immediately when the task mentions contracts, shared modules,
+infrastructure coupling, or "where else is this used?".
 
 ### For Terraform repositories
 
@@ -219,6 +240,15 @@ repository.
 If MCP results are sparse, obviously stale, or miss files that should exist,
 assume the repo may not be indexed yet or the latest changes were not indexed.
 
+If the user reports setup uncertainty or the MCP is not ready, prefer telling
+them to run:
+
+```bash
+make health
+```
+
+before deeper troubleshooting.
+
 Tell the user clearly to run, from inside the target repository:
 
 ```bash
@@ -238,12 +268,17 @@ Do not invent data when indexing is clearly stale.
 - Do not call every MCP tool on every request.
 - Do not make the user remember MCP tool names when the skill can infer the
   right MCP calls automatically.
+- Do not ask permission to use normal MCP discovery when the task clearly needs
+  repository context.
+- Do not tell the user to run `repo_register` by reflex when `mcp-index` is the
+  correct next step.
 - Do not use semantic search first when the user is asking for an exact file,
   route, symbol, module, or resource.
 - Do not skip cross-repo search for Terraform/Lambda work when infrastructure
   coupling is plausible.
 - Do not save noisy or temporary context with `context_add`.
 - Do not call `search_across_repos` for strictly local trivial edits.
+- Do not assume read operations will auto-create missing repos.
 - If the user explicitly says not to use MCP, obey that.
 
 ## Practical Prompts To Internally Follow

@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"luck-mcp/internal/domain"
 	"luck-mcp/internal/embeddings"
@@ -65,7 +67,7 @@ func NewContextService(
 }
 
 func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (int64, error) {
-	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	repo, err := s.ensureRepo(ctx, in.Project, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -141,7 +143,7 @@ func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (in
 }
 
 func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInput) ([]domain.SearchResult, error) {
-	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	repo, err := s.resolveExistingRepo(ctx, in.Project)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +208,7 @@ func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInpu
 }
 
 func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput) (string, error) {
-	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	repo, err := s.resolveExistingRepo(ctx, in.Project)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +229,7 @@ func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput)
 		return "", fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
 	}
 	if len(items) == 0 {
-		return "Nenhum contexto encontrado para o projeto.", nil
+		return s.buildIndexedFallbackBrief(ctx, repo, maxItems)
 	}
 
 	sort.SliceStable(items, func(i, j int) bool {
@@ -273,7 +275,7 @@ func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput)
 	return strings.TrimSpace(b.String()), nil
 }
 
-func (s *ContextService) resolveRepo(ctx context.Context, project string, rootPath *string) (domain.Repo, error) {
+func (s *ContextService) ensureRepo(ctx context.Context, project string, rootPath *string) (domain.Repo, error) {
 	name := strings.TrimSpace(project)
 	if name == "" {
 		name = s.defaultProject
@@ -286,6 +288,193 @@ func (s *ContextService) resolveRepo(ctx context.Context, project string, rootPa
 		return domain.Repo{}, fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
 	}
 	return repo, nil
+}
+
+func (s *ContextService) resolveExistingRepo(ctx context.Context, project string) (domain.Repo, error) {
+	name := strings.TrimSpace(project)
+	if name == "" {
+		name = s.defaultProject
+	}
+	if name == "" {
+		return domain.Repo{}, fmt.Errorf("%w: project is required", domain.ErrInvalidInput)
+	}
+
+	repo, found, err := s.store.GetRepoByName(ctx, name)
+	if err != nil {
+		return domain.Repo{}, fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
+	}
+	if !found {
+		return domain.Repo{}, fmt.Errorf("%w: project %q is not registered or indexed yet; run repo_register or mcp-index first", domain.ErrInvalidInput, name)
+	}
+	return repo, nil
+}
+
+func (s *ContextService) buildIndexedFallbackBrief(ctx context.Context, repo domain.Repo, maxItems int) (string, error) {
+	docLimit := maxItems
+	if docLimit > 4 {
+		docLimit = 4
+	}
+	if docLimit < 2 {
+		docLimit = 2
+	}
+
+	docs, err := s.store.FindFiles(ctx, repository.FindFilesInput{
+		RepoNames: []string{repo.Name},
+		Query:     "readme architecture overview setup quickstart adr guide docs",
+		FileType:  "doc",
+		K:         docLimit,
+	})
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
+	}
+
+	indexedFiles, err := s.store.ListIndexedFiles(ctx, repo.ID)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
+	}
+	highlights := selectHighlightedFiles(indexedFiles, minInt(maxItems, 5))
+
+	if len(docs) == 0 && len(highlights) == 0 {
+		return fmt.Sprintf("Projeto %s encontrado, mas ainda nao ha memoria curada nem arquivos indexados suficientes. Rode mcp-index neste repo ou salve contexto com context_add.", repo.Name), nil
+	}
+
+	var b strings.Builder
+	b.WriteString("Brief de contexto do projeto ")
+	b.WriteString(repo.Name)
+	b.WriteString(" (fallback do indice; ainda nao ha memoria curada):\n")
+
+	if repo.LastIndexedAt != nil {
+		b.WriteString("- ultimo indice atualizado em: ")
+		b.WriteString(repo.LastIndexedAt.Format(time.RFC3339))
+		b.WriteByte('\n')
+	}
+
+	if len(docs) > 0 {
+		b.WriteString("- docs recomendados para comecar:\n")
+		for _, doc := range docs {
+			b.WriteString("  - ")
+			b.WriteString(doc.Path)
+			b.WriteByte('\n')
+		}
+	}
+
+	if len(highlights) > 0 {
+		b.WriteString("- arquivos-chave indexados:\n")
+		for _, file := range highlights {
+			b.WriteString("  - ")
+			b.WriteString(file.Path)
+			b.WriteString(" [")
+			b.WriteString(file.FileType)
+			if file.Language != "" {
+				b.WriteString("/")
+				b.WriteString(file.Language)
+			}
+			b.WriteString("]")
+			if file.ChunkCount > 0 {
+				b.WriteString(fmt.Sprintf(" chunks=%d", file.ChunkCount))
+			}
+			b.WriteByte('\n')
+		}
+	}
+
+	b.WriteString("- proximo passo sugerido: leia os docs acima e depois use repo_find_files ou repo_search para aprofundar um tema.")
+
+	s.logger.Info("project brief fallback generated",
+		slog.String("repo", repo.Name),
+		slog.Int("doc_count", len(docs)),
+		slog.Int("highlight_count", len(highlights)),
+	)
+	return strings.TrimSpace(b.String()), nil
+}
+
+func selectHighlightedFiles(files []repository.IndexedFile, limit int) []repository.IndexedFile {
+	if len(files) == 0 || limit <= 0 {
+		return nil
+	}
+
+	candidates := make([]repository.IndexedFile, 0, len(files))
+	for _, file := range files {
+		if strings.EqualFold(file.Status, "indexed") {
+			candidates = append(candidates, file)
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left := highlightedFileScore(candidates[i])
+		right := highlightedFileScore(candidates[j])
+		if left == right {
+			return candidates[i].Path < candidates[j].Path
+		}
+		return left > right
+	})
+
+	seen := make(map[string]struct{}, limit)
+	selected := make([]repository.IndexedFile, 0, limit)
+	for _, file := range candidates {
+		if _, ok := seen[file.Path]; ok {
+			continue
+		}
+		seen[file.Path] = struct{}{}
+		selected = append(selected, file)
+		if len(selected) == limit {
+			break
+		}
+	}
+	return selected
+}
+
+func highlightedFileScore(file repository.IndexedFile) int {
+	score := 0
+	switch file.FileType {
+	case "infra":
+		score += 400
+	case "code":
+		score += 320
+	case "config":
+		score += 200
+	case "doc":
+		score += 80
+	case "test":
+		score -= 120
+	}
+
+	path := strings.ToLower(strings.TrimSpace(file.Path))
+	base := filepath.Base(path)
+
+	switch {
+	case base == "main.go":
+		score += 180
+	case base == "main.tf":
+		score += 170
+	case base == "versions.tf":
+		score += 150
+	case strings.HasPrefix(base, "readme"):
+		score += 140
+	}
+
+	if strings.Contains(path, "/cmd/") {
+		score += 110
+	}
+	if strings.Contains(path, "/internal/service/") || strings.Contains(path, "/service/") {
+		score += 90
+	}
+	if strings.Contains(path, "/module") || strings.Contains(path, "/modules/") {
+		score += 80
+	}
+	if strings.Contains(path, "/docs/") || strings.Contains(path, "/adr") {
+		score += 30
+	}
+
+	score += minInt(file.ChunkCount, 20) * 6
+	score += minInt(int(file.SizeBytes/512), 30)
+	score -= minInt(len(path), 120) / 3
+	return score
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func normalizeTags(tags []string) []string {
