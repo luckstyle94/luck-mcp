@@ -1,7 +1,7 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: luck-mpc-postgres
+    container_name: luck-mcp-postgres
     environment:
       POSTGRES_USER: mcp
       POSTGRES_PASSWORD: mcp
@@ -23,7 +23,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: luck-mpc-ollama
+    container_name: luck-mcp-ollama
     ports:
       - "11434:11434"
     volumes:
@@ -33,7 +33,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: luck-mpc-server
+    container_name: luck-mcp-server
     depends_on:
       postgres:
         condition: service_healthy

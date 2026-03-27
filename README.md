@@ -343,14 +343,14 @@ Use esta configuracao MCP no Cursor:
 ```json
 {
   "mcpServers": {
-    "luck-mpc": {
+    "luck-mcp": {
       "command": "docker",
       "args": [
         "exec",
         "-e",
         "LOG_LEVEL=error",
         "-i",
-        "luck-mpc-server",
+        "luck-mcp-server",
         "/mcp-server"
       ]
     }
@@ -360,7 +360,7 @@ Use esta configuracao MCP no Cursor:
 
 Observacoes importantes:
 - Essa estrategia usa `docker exec` e evita problemas de timeout comuns de `docker compose run`.
-- O container `luck-mpc-server` precisa estar ativo (`docker compose up -d ...`).
+- O container `luck-mcp-server` precisa estar ativo (`docker compose up -d ...`).
 - Se quiser projeto padrao sem enviar `project` toda hora, adicione no `args`:
   - `"-e", "MCP_PROJECT_DEFAULT=meu-projeto"`
 
@@ -374,12 +374,12 @@ Regra geral: qualquer cliente MCP que aceite `command + args` pode usar o mesmo 
 
 Comando base:
 ```bash
-docker exec -e LOG_LEVEL=error -i luck-mpc-server /mcp-server
+docker exec -e LOG_LEVEL=error -i luck-mcp-server /mcp-server
 ```
 
 Para clients que aceitam env no comando, opcional:
 ```bash
-docker exec -e LOG_LEVEL=error -e MCP_PROJECT_DEFAULT=meu-projeto -i luck-mpc-server /mcp-server
+docker exec -e LOG_LEVEL=error -e MCP_PROJECT_DEFAULT=meu-projeto -i luck-mcp-server /mcp-server
 ```
 
 ## 8) Como usar no dia a dia com a IA
@@ -557,7 +557,7 @@ content="Problema: ... Causa: ... Solucao: ..."
 ## 11) Troubleshooting (problemas comuns)
 ### Cursor fica em "loading tools"
 Checklist:
-1. `docker compose ps` e confirmar `luck-mpc-server`, `luck-mpc-postgres`, `luck-mpc-ollama` como `Up`
+1. `docker compose ps` e confirmar `luck-mcp-server`, `luck-mcp-postgres`, `luck-mcp-ollama` como `Up`
 2. conferir config MCP usando `docker exec ... /mcp-server`
 3. rodar `docker compose build mcp` apos mudancas de codigo
 4. Reload Window no Cursor
@@ -610,7 +610,7 @@ docker compose ps
 
 Ver logs do MCP:
 ```bash
-docker logs --tail=200 luck-mpc-server
+docker logs --tail=200 luck-mcp-server
 ```
 
 Parar tudo:

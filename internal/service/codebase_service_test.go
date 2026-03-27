@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"luck-mpc/internal/domain"
-	"luck-mpc/internal/repository"
+	"luck-mcp/internal/domain"
+	"luck-mcp/internal/repository"
 )
 
 type fakeStore struct{}

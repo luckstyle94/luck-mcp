@@ -9,7 +9,7 @@ import (
 
 	"github.com/lib/pq"
 
-	"luck-mpc/internal/domain"
+	"luck-mcp/internal/domain"
 )
 
 type PostgresDocumentRepository struct {

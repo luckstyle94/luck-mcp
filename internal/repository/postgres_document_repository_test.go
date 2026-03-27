@@ -9,7 +9,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/lib/pq"
 
-	"luck-mpc/internal/domain"
+	"luck-mcp/internal/domain"
 )
 
 func TestEnsureRepo_Success(t *testing.T) {
@@ -22,7 +22,7 @@ func TestEnsureRepo_Success(t *testing.T) {
 	repo := NewPostgresDocumentRepository(db)
 	now := time.Now()
 	rows := sqlmock.NewRows([]string{"id", "name", "root_path", "description", "tags", "active", "last_indexed_at", "created_at", "updated_at"}).
-		AddRow(int64(7), "luck-mpc", "/workspace", nil, pq.StringArray{"local"}, true, nil, now, now)
+		AddRow(int64(7), "luck-mcp", "/workspace", nil, pq.StringArray{"local"}, true, nil, now, now)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
 INSERT INTO repos (name, root_path, description, tags, active)
@@ -35,15 +35,15 @@ DO UPDATE SET
 	active = COALESCE(EXCLUDED.active, repos.active),
 	updated_at = NOW()
 RETURNING id, name, root_path, description, COALESCE(tags, ARRAY[]::text[]), active, last_indexed_at, created_at, updated_at`)).
-		WithArgs("luck-mpc", "/workspace", nil, nil, sqlmock.AnyArg()).
+		WithArgs("luck-mcp", "/workspace", nil, nil, sqlmock.AnyArg()).
 		WillReturnRows(rows)
 
 	root := "/workspace"
-	got, err := repo.EnsureRepo(context.Background(), "luck-mpc", &root)
+	got, err := repo.EnsureRepo(context.Background(), "luck-mcp", &root)
 	if err != nil {
 		t.Fatalf("EnsureRepo returned error: %v", err)
 	}
-	if got.ID != 7 || got.Name != "luck-mpc" {
+	if got.ID != 7 || got.Name != "luck-mcp" {
 		t.Fatalf("unexpected repo: %+v", got)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -317,7 +317,7 @@ func TestFindFiles_Success(t *testing.T) {
 
 	repo := NewPostgresDocumentRepository(db)
 	in := FindFilesInput{
-		RepoNames: []string{"luck-mpc"},
+		RepoNames: []string{"luck-mcp"},
 		Query:     "README",
 		FileType:  "doc",
 		K:         10,
@@ -325,7 +325,7 @@ func TestFindFiles_Success(t *testing.T) {
 
 	q := `(?s)SELECT\s+r\.name,\s+f\.path,.*FROM indexed_files f.*JOIN repos r ON r\.id = f\.repo_id.*LEFT JOIN indexed_chunks c.*LEFT JOIN file_signals fs.*WHERE r\.active = TRUE AND f\.status = 'indexed' AND r\.name = ANY\(\$1::text\[\]\) AND f\.file_type = \$2.*LIMIT \$4`
 	rows := sqlmock.NewRows([]string{"name", "path", "score", "file_type", "language", "size_bytes", "snippet"}).
-		AddRow("luck-mpc", "README.md", 0.97, "doc", "markdown", int64(14000), "README bootstrap")
+		AddRow("luck-mcp", "README.md", 0.97, "doc", "markdown", int64(14000), "README bootstrap")
 
 	mock.ExpectQuery(q).
 		WithArgs(sqlmock.AnyArg(), "doc", "README", 10).
@@ -338,7 +338,7 @@ func TestFindFiles_Success(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(got))
 	}
-	if got[0].Path != "README.md" || got[0].Repo != "luck-mpc" {
+	if got[0].Path != "README.md" || got[0].Repo != "luck-mcp" {
 		t.Fatalf("unexpected result: %+v", got[0])
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

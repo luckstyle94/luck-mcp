@@ -208,7 +208,7 @@ cd /home/$USER/path/to/luck-mcp
 ```
 
 Practical rules:
-- `make up`, `make down`, `make migrate`, `make index`, `make index-full`: run from `luck-mpc`.
+- `make up`, `make down`, `make migrate`, `make index`, `make index-full`: run from `luck-mcp`.
 - `ROOT` in `make index`: absolute path of the project you want to index (Go, Python, Terraform, React, etc.).
 - MCP tools (`repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`) are used in your agent chat (Cursor/Codex/Claude), not in terminal.
 - You do not need to manually enter containers for normal usage.
@@ -328,14 +328,14 @@ Use this MCP configuration in Cursor:
 ```json
 {
   "mcpServers": {
-    "luck-mpc": {
+    "luck-mcp": {
       "command": "docker",
       "args": [
         "exec",
         "-e",
         "LOG_LEVEL=error",
         "-i",
-        "luck-mpc-server",
+        "luck-mcp-server",
         "/mcp-server"
       ]
     }
@@ -345,7 +345,7 @@ Use this MCP configuration in Cursor:
 
 Important notes:
 - This approach uses `docker exec` and avoids common timeout issues from `docker compose run`.
-- Container `luck-mpc-server` must be running (`docker compose up -d ...`).
+- Container `luck-mcp-server` must be running (`docker compose up -d ...`).
 - If you want a default project without sending `project` every time, add to `args`:
   - `"-e", "MCP_PROJECT_DEFAULT=my-project"`
 
@@ -359,12 +359,12 @@ General rule: any MCP client that accepts `command + args` can use the same comm
 
 Base command:
 ```bash
-docker exec -e LOG_LEVEL=error -i luck-mpc-server /mcp-server
+docker exec -e LOG_LEVEL=error -i luck-mcp-server /mcp-server
 ```
 
 Optional for clients that allow env vars:
 ```bash
-docker exec -e LOG_LEVEL=error -e MCP_PROJECT_DEFAULT=my-project -i luck-mpc-server /mcp-server
+docker exec -e LOG_LEVEL=error -e MCP_PROJECT_DEFAULT=my-project -i luck-mcp-server /mcp-server
 ```
 
 ## 8) How to use it day to day with AI
@@ -380,7 +380,7 @@ Available tools:
 - `project_brief`
 
 ### 8.0 Simple daily flow (beginner-friendly)
-1. In terminal, inside `luck-mpc`, run:
+1. In terminal, inside `luck-mcp`, run:
 ```bash
 make up
 make migrate
@@ -519,7 +519,7 @@ content="Problem: ... Cause: ... Solution: ..."
 ## 11) Troubleshooting (common problems)
 ### Cursor stuck on "loading tools"
 Checklist:
-1. Run `docker compose ps` and confirm `luck-mpc-server`, `luck-mpc-postgres`, `luck-mpc-ollama` are `Up`
+1. Run `docker compose ps` and confirm `luck-mcp-server`, `luck-mcp-postgres`, `luck-mcp-ollama` are `Up`
 2. Confirm MCP config is using `docker exec ... /mcp-server`
 3. Run `docker compose build mcp` after code changes
 4. Reload Window in Cursor
@@ -572,7 +572,7 @@ docker compose ps
 
 Check MCP logs:
 ```bash
-docker logs --tail=200 luck-mpc-server
+docker logs --tail=200 luck-mcp-server
 ```
 
 Stop everything:

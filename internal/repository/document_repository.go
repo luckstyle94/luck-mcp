@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"luck-mpc/internal/domain"
+	"luck-mcp/internal/domain"
 )
 
 const AutoIndexTag = "_auto_index"

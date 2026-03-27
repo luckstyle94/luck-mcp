@@ -17,8 +17,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"luck-mpc/internal/embeddings"
-	"luck-mpc/internal/repository"
+	"luck-mcp/internal/embeddings"
+	"luck-mcp/internal/repository"
 )
 
 var (

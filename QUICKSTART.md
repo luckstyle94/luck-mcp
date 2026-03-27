@@ -164,14 +164,14 @@ Use esta configuracao MCP:
 ```json
 {
   "mcpServers": {
-    "luck-mpc": {
+    "luck-mcp": {
       "command": "docker",
       "args": [
         "exec",
         "-e",
         "LOG_LEVEL=error",
         "-i",
-        "luck-mpc-server",
+        "luck-mcp-server",
         "/mcp-server"
       ]
     }
@@ -245,7 +245,7 @@ docker compose ps
 
 Logs MCP:
 ```bash
-docker logs --tail=200 luck-mpc-server
+docker logs --tail=200 luck-mcp-server
 ```
 
 ## 6) Se der problema no Cursor (loading tools)
