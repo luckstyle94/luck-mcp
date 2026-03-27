@@ -1,11 +1,11 @@
 # Quickstart (PT-BR)
 
-Guia rapido para colocar o MCP no ar e usar no Cursor em poucos minutos.
+Guia rapido para colocar o MCP no ar e usar no Cursor ou Codex em poucos minutos.
 
 ## Cheatsheet diario (resumo de 30s)
 1. Abrir o dia:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make up
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 ```
@@ -23,7 +23,7 @@ make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 
 3. Fechar o dia (opcional):
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make down
 ```
 
@@ -54,10 +54,23 @@ O que essa skill faz:
 - usa `project_brief` e `context_search` para memoria
 - sugere `mcp-index` quando o indice parecer velho ou incompleto
 
-Organizacao principal dos repos:
-- `/home/luckstyle/repo/iac`: Terraform, prioridade mais alta
-- `/home/luckstyle/repo/lambda`: Lambdas, geralmente Python
-- `/home/luckstyle/repo/private`: repos pessoais
+### Como instalar a skill
+```bash
+mkdir -p ~/.codex/skills
+ln -s /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp ~/.codex/skills/codebase-memory-mcp
+```
+
+Se preferir copiar:
+
+```bash
+mkdir -p ~/.codex/skills/codebase-memory-mcp
+cp -R /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp/. ~/.codex/skills/codebase-memory-mcp/
+```
+
+Organizacao sugerida dos repos:
+- `/home/$USER/repos/iac`: Terraform, prioridade mais alta
+- `/home/$USER/repos/lambda`: Lambdas, geralmente Python
+- `/home/$USER/repos/private`: repos pessoais
 
 Para Terraform, o Codex deve seguir padroes dos repos mais novos quando fizer sentido e pode combinar este MCP com a skill `vex-tf`.
 
@@ -65,20 +78,20 @@ Para Terraform, o Codex deve seguir padroes dos repos mais novos quando fizer se
 Crie os atalhos:
 
 ```bash
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 ```
 
 Salvar no bash:
 
 ```bash
 cat <<'EOF' >> ~/.bashrc
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 EOF
 source ~/.bashrc
 ```
@@ -96,26 +109,26 @@ Importante:
 Rode todos os comandos abaixo no seu terminal local, dentro da pasta do MCP:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 ```
 
 Importante:
-- `make index` sempre roda aqui no `luck-mpc`.
-- O `ROOT` aponta para o projeto que voce quer indexar (ex.: `/home/$USER/repo/private/meu-api`).
+- `make index` sempre roda aqui no `luck-mcp`.
+- O `ROOT` aponta para o projeto que voce quer indexar (ex.: `/home/$USER/repos/private/meu-api`).
 - As tools (`repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`) sao usadas no chat do agent.
 
-### Exemplo direto com `/home/meu-projeto1`
+### Exemplo direto com `/home/$USER/repos/meu-projeto1`
 Terminal (sempre no repo MCP):
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make up
-make index PROJECT=meu-projeto1 ROOT=/home/meu-projeto1
+make index PROJECT=meu-projeto1 ROOT=/home/$USER/repos/meu-projeto1
 ```
 
 No chat da IA:
 ```text
 Use codebase memory for this session.
-Use repo_register com name="meu-projeto1", root_path="/home/meu-projeto1", description="Descricao curta do repo", tags=["backend","auth"].
+Use repo_register com name="meu-projeto1", root_path="/home/$USER/repos/meu-projeto1", description="Descricao curta do repo", tags=["backend","auth"].
 Use search_across_repos com query="auth" e k=5.
 Use repo_find_files com repos=["meu-projeto1"] query="auth" e k=10.
 Use repo_find_docs com repos=["meu-projeto1"] query="arquitetura" e k=5.
@@ -128,7 +141,7 @@ Use context_add no projeto "meu-projeto1" com kind="summary", importance=5, cont
 ## 1) Primeira configuracao
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
@@ -168,27 +181,27 @@ Depois:
 
 ### Iniciar no comeco do dia
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose up -d postgres ollama mcp
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
 ### Parar no fim do dia
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose down
 ```
 
 ### Quando rodar migrate
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make migrate
 ```
 
 ### Quando rodar index-full
 Use quando quiser reconstruir toda a base de contexto do projeto:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make index-full PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 

@@ -1,11 +1,11 @@
 ---
 name: codebase-memory-mcp
 description: |
-  Default skill for day-to-day work inside repositories under /home/luckstyle/repo.
+  Default skill for day-to-day work inside repositories under /home/$USER/repos.
   Trigger whenever the user is exploring, editing, reviewing, debugging, or
   researching code in a repo, especially Terraform repos under iac/, Lambda
   repos under lambda/, and personal repos under private/. Automatically use the
-  local luck-mpc tools for bootstrap, docs/files discovery, cross-repo impact,
+  local luck-mcp tools for bootstrap, docs/files discovery, cross-repo impact,
   and durable engineering memory. When the repo is Terraform-related, strongly
   bias toward multi-repo search and also follow vex-tf guidance when validating
   Terraform patterns. If MCP results look stale, tell the user to run mcp-index
@@ -14,18 +14,18 @@ description: |
 
 # Codebase Memory MCP
 
-Use this skill by default for repository work when the local `luck-mpc` MCP is
+Use this skill by default for repository work when the local `luck-mcp` MCP is
 configured. The goal is to make MCP usage automatic and predictable without
 spamming tools on trivial requests.
 
 ## Core Rule
 
 Treat the MCP as the default research layer for repository context inside
-`/home/luckstyle/repo`.
+`/home/$USER/repos`.
 
 Default assumption:
 
-- if the user is working in a repository under `/home/luckstyle/repo`, use
+- if the user is working in a repository under `/home/$USER/repos`, use
   codebase memory unless the task is trivial or the user explicitly says not to
 - at the beginning of the session, act as if the convention is:
   `use codebase memory for this session`
@@ -44,7 +44,7 @@ Do not wait for the user to remember tool names.
 The main repository root is:
 
 ```text
-/home/luckstyle/repo
+/home/$USER/repos
 ```
 
 Important groups:
@@ -60,7 +60,7 @@ Important groups:
 - `private/`
   Personal/private repositories.
 
-- other repos directly inside `/home/luckstyle/repo`
+- other repos directly inside `/home/$USER/repos`
   Still valid and may be relevant. Do not ignore them only because they are not
   inside `iac/`, `lambda/`, or `private/`.
 
@@ -68,7 +68,7 @@ Important groups:
 
 Terraform repositories are the most common and highest-priority use case.
 
-When the current repo is under `/home/luckstyle/repo/iac/`:
+When the current repo is under `/home/$USER/repos/iac/`:
 
 1. default to codebase memory usage early
 2. use `search_across_repos` more aggressively for impact and reuse
@@ -89,7 +89,7 @@ Treat these as strong pattern references when relevant.
 
 ## Lambda Bias
 
-When the current repo is under `/home/luckstyle/repo/lambda/`:
+When the current repo is under `/home/$USER/repos/lambda/`:
 
 1. assume Lambda/Terraform relationships may matter
 2. search `iac/` repos when infrastructure, permissions, triggers, queues,

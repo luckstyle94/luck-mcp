@@ -1,4 +1,4 @@
-# luck-mpc: multi-repo codebase memory for AI agents via MCP
+# luck-mcp: multi-repo codebase memory for AI agents via MCP
 
 ## THIS PROJECT WAS 100% CREATED USING AI (CODEX 5.3)
 
@@ -12,7 +12,7 @@
 Always run commands in terminal, inside the MCP folder:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 ```
 
 1. When you start your day/project:
@@ -65,9 +65,9 @@ Quick definitions:
 The MCP is available to any configured MCP client, but the most automatic flow is currently prepared for Codex CLI.
 
 How it works:
-- there is a local Codex skill for `luck-mpc`
-- it is installed via symlink in `~/.codex/skills/codebase-memory-mcp`
-- it tells Codex to use `repo_find_docs`, `repo_find_files`, `repo_search`, `search_across_repos`, `project_brief`, `context_search`, and `context_add` automatically for codebase work
+- there is a local Codex skill for `luck-mcp`
+- it tells Codex to use docs discovery, file discovery, cross-repo search, and saved memory automatically for codebase work
+- in practice, you do not need to remember every MCP tool name
 
 Recommended convention at session start:
 ```text
@@ -76,18 +76,33 @@ use codebase memory for this session
 
 This makes behavior more predictable even when the skill is already installed.
 
-## Real repository topology
-Your main repository root is:
+### How to install the Codex skill
+If the skill is not installed yet, create the Codex skills folder and link this project's skill:
 
-```text
-/home/luckstyle/repo
+```bash
+mkdir -p ~/.codex/skills
+ln -s /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp ~/.codex/skills/codebase-memory-mcp
 ```
 
-Main organization:
+If you prefer copying instead of symlink:
+
+```bash
+mkdir -p ~/.codex/skills/codebase-memory-mcp
+cp -R /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp/. ~/.codex/skills/codebase-memory-mcp/
+```
+
+## Suggested repository topology
+A common layout is:
+
+```text
+/home/$USER/repos
+```
+
+Suggested organization:
 - `iac/`: Terraform repositories; highest-priority group for this MCP
 - `lambda/`: Lambda repositories; usually Python, but not always
 - `private/`: personal/private repositories
-- other repos directly under `/home/luckstyle/repo`: still relevant and should not be ignored
+- other repos directly under `/home/$USER/repos`: still relevant and should not be ignored
 
 Expected behavior:
 - for `iac/` repos, use MCP early and bias more strongly toward cross-repo search
@@ -109,20 +124,20 @@ Important preference:
 To simplify daily usage, you can create aliases:
 
 ```bash
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 ```
 
 To persist in bash:
 
 ```bash
 cat <<'EOF' >> ~/.bashrc
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 EOF
 source ~/.bashrc
 ```
@@ -178,7 +193,7 @@ You do not need to install Postgres or Ollama manually.
 Run setup and maintenance commands in your local terminal, inside this MCP repository:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 ```
 
 Practical rules:
@@ -187,19 +202,19 @@ Practical rules:
 - MCP tools (`repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`) are used in your agent chat (Cursor/Codex/Claude), not in terminal.
 - You do not need to manually enter containers for normal usage.
 
-### Real example: I am working in `/home/my-project1`
+### Real example: I am working in `/home/$USER/repos/my-project1`
 If you are working on this project, keep the same MCP project name, for example: `my-project1`.
 
-In terminal (inside `luck-mpc` repo), run:
+In terminal (inside `luck-mcp` repo), run:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make up
-make index PROJECT=my-project1 ROOT=/home/my-project1
+make index PROJECT=my-project1 ROOT=/home/$USER/repos/my-project1
 ```
 
 Then in AI chat (Cursor/Codex/Claude), call tools with that same project:
 ```text
-Use repo_register with name="my-project1", root_path="/home/my-project1", description="Short repo description", tags=["backend","auth"].
+Use repo_register with name="my-project1", root_path="/home/$USER/repos/my-project1", description="Short repo description", tags=["backend","auth"].
 ```
 
 ```text
@@ -227,15 +242,15 @@ Use context_add for project "my-project1" with kind="summary", importance=5, con
 ```
 
 Important summary:
-- You can be coding inside `/home/my-project1`.
-- But `make ...` commands are always executed in MCP folder (`luck-mpc`).
+- You can be coding inside `/home/$USER/repos/my-project1`.
+- But `make ...` commands are always executed in MCP folder (`luck-mcp`).
 - Tools are called in agent chat and should use consistent `project` value.
 
 ## 4) Initial setup (first time)
 Run exactly in this order:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
@@ -254,14 +269,14 @@ What each command does:
 ## 5) Daily routine (normal usage)
 ### Start environment at the beginning of the day
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose up -d postgres ollama mcp
 make index PROJECT=my-project ROOT=/absolute/path/to/repo
 ```
 
 ### Stop environment at the end of the day
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose down
 ```
 
@@ -273,7 +288,7 @@ Run it when:
 
 Command:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make migrate
 ```
 

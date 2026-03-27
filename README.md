@@ -1,4 +1,4 @@
-# luck-mpc: codebase memory multi-repo para agents de IA via MCP
+# luck-mcp: codebase memory multi-repo para agentes de IA via MCP
 
 ## PROJETO 100% CRIADO UTILIZANDO IA (CODEX 5.3)
 
@@ -12,7 +12,7 @@
 Sempre rode comandos no terminal, dentro da pasta do MCP:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 ```
 
 1. Quando abrir o dia/projeto:
@@ -62,12 +62,12 @@ Definicoes rapidas:
 - `reindex completo`: recria toda a memoria indexada daquele projeto (mais lento, usado em manutencao/correcao).
 
 ## Uso automatico no Codex
-O MCP fica disponivel para qualquer client MCP configurado, mas o uso mais automatico hoje foi preparado para o Codex CLI.
+O MCP fica disponivel para qualquer client MCP configurado, mas o uso mais simples hoje foi preparado para o Codex CLI.
 
 Como isso funciona:
-- existe uma skill local do Codex para usar o `luck-mpc` automaticamente em tarefas de codebase
-- ela foi instalada por link simbolico em `~/.codex/skills/codebase-memory-mcp`
-- ela orienta o Codex a usar `repo_find_docs`, `repo_find_files`, `repo_search`, `search_across_repos`, `project_brief`, `context_search` e `context_add` sem voce precisar lembrar o nome de todas as tools
+- existe uma skill local do Codex para usar o `luck-mcp` automaticamente em tarefas de codebase
+- essa skill ensina o Codex a procurar docs, localizar arquivos, buscar memoria salva e comparar repositorios relacionados
+- na pratica, voce nao precisa decorar o nome de todas as tools
 
 Convencao recomendada no inicio da sessao do Codex:
 ```text
@@ -76,18 +76,40 @@ use codebase memory for this session
 
 Essa frase ajuda a deixar o comportamento previsivel, mesmo quando a skill ja estiver instalada.
 
-## Topologia real dos repositorios
-Sua raiz principal de repositorios e:
+### Como instalar a skill do Codex
+Se a skill ainda nao estiver instalada, crie a pasta de skills do Codex e faça um link simbolico:
 
-```text
-/home/luckstyle/repo
+```bash
+mkdir -p ~/.codex/skills
+ln -s /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp ~/.codex/skills/codebase-memory-mcp
 ```
 
-Organizacao principal:
+Se preferir copiar os arquivos em vez de criar link:
+
+```bash
+mkdir -p ~/.codex/skills/codebase-memory-mcp
+cp -R /home/$USER/path/to/luck-mcp/skills/codebase-memory-mcp/. ~/.codex/skills/codebase-memory-mcp/
+```
+
+### O que a skill faz por voce
+- procura README, ADR e docs primeiro
+- encontra arquivos e modulos importantes
+- usa busca cross-repo quando o problema pode afetar mais de um repositorio
+- consulta memoria salva antes de mexer em area sensivel
+- salva decisoes importantes para reutilizar depois
+
+## Organizacao sugerida dos repositorios
+Um layout comum e:
+
+```text
+/home/$USER/repos
+```
+
+Organizacao sugerida:
 - `iac/`: repositorios Terraform; sao os mais importantes para este MCP
 - `lambda/`: repositorios Lambda; geralmente Python, mas nao sempre
 - `private/`: repositorios pessoais/privados
-- outros repos direto em `/home/luckstyle/repo`: ainda podem ser relevantes e nao devem ser ignorados
+- outros repos direto em `/home/$USER/repos`: ainda podem ser relevantes e nao devem ser ignorados
 
 Comportamento esperado:
 - em repos `iac/`, o MCP deve ser usado cedo e com busca cross-repo com mais frequencia
@@ -109,20 +131,20 @@ Preferencia importante:
 Para facilitar uso diario, voce pode criar aliases:
 
 ```bash
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 ```
 
 Para salvar definitivamente no bash:
 
 ```bash
 cat <<'EOF' >> ~/.bashrc
-alias mcp-up='cd /home/$USER/repo/private/luck-mpc && make up'
-alias mcp-down='cd /home/$USER/repo/private/luck-mpc && make down'
-alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index PROJECT="$project_name" ROOT="$project_root")'
-alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/repo/private/luck-mpc && make index-full PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-up='cd /home/$USER/path/to/luck-mcp && make up'
+alias mcp-down='cd /home/$USER/path/to/luck-mcp && make down'
+alias mcp-index='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index PROJECT="$project_name" ROOT="$project_root")'
+alias mcp-index-full='project_root="$PWD"; project_name="$(basename "$project_root")"; (cd /home/$USER/path/to/luck-mcp && make index-full PROJECT="$project_name" ROOT="$project_root")'
 EOF
 source ~/.bashrc
 ```
@@ -178,28 +200,28 @@ Nao precisa instalar Postgres nem Ollama manualmente.
 Todos os comandos de setup e manutencao devem ser executados no seu terminal local, dentro da pasta deste repositiorio MCP:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 ```
 
 Regras praticas:
-- `make up`, `make down`, `make migrate`, `make index`, `make index-full`: execute na pasta `luck-mpc`.
+- `make up`, `make down`, `make migrate`, `make index`, `make index-full`: execute na pasta `luck-mcp`.
 - `ROOT` do `make index`: e o caminho absoluto do projeto que voce quer indexar (pode ser Go, Python, Terraform, React etc.).
 - As tools MCP (`repo_list`, `repo_register`, `search_across_repos`, `repo_search`, `repo_find_files`, `repo_find_docs`, `context_add`, `context_search`, `project_brief`) voce usa no chat do agent (Cursor/Codex/Claude), nao no terminal.
 - Nao precisa entrar em container manualmente para uso normal.
 
-### Exemplo real: estou em `/home/meu-projeto1`
+### Exemplo real: estou em `/home/$USER/path/to/meu-projeto1`
 Se voce esta trabalhando nesse projeto, use sempre o mesmo nome de projeto no MCP, por exemplo: `meu-projeto1`.
 
-No terminal (dentro do repo `luck-mpc`), rode:
+No terminal (dentro do repo `luck-mcp`), rode:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make up
-make index PROJECT=meu-projeto1 ROOT=/home/meu-projeto1
+make index PROJECT=meu-projeto1 ROOT=/home/$USER/path/to/meu-projeto1
 ```
 
 Depois, no chat da IA (Cursor/Codex/Claude), use as tools com esse projeto:
 ```text
-Use repo_register com name="meu-projeto1", root_path="/home/meu-projeto1", description="Descricao curta do repo", tags=["backend","auth"].
+Use repo_register com name="meu-projeto1", root_path="/home/$USER/path/to/meu-projeto1", description="Descricao curta do repo", tags=["backend","auth"].
 ```
 
 ```text
@@ -227,15 +249,15 @@ Use context_add no projeto "meu-projeto1" com kind="summary", importance=5, cont
 ```
 
 Resumo importante:
-- Voce pode estar codando em `/home/meu-projeto1`.
-- Mas os comandos `make ...` sempre sao executados na pasta do MCP (`luck-mpc`).
+- Voce pode estar codando em `/home/$USER/path/to/meu-projeto1`.
+- Mas os comandos `make ...` sempre sao executados na pasta do MCP (`luck-mcp`).
 - As tools sao chamadas no chat do agent e precisam do campo `project` consistente.
 
 ## 4) Setup inicial (primeira vez)
 Rode exatamente nesta ordem:
 
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
@@ -254,14 +276,14 @@ O que cada comando faz:
 ## 5) Rotina diaria (uso normal)
 ### Iniciar ambiente no comeco do dia
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose up -d postgres ollama mcp
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
 ### Parar ambiente no fim do dia
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 docker compose down
 ```
 
@@ -273,7 +295,7 @@ Rode quando:
 
 Comando:
 ```bash
-cd /home/$USER/repo/private/luck-mpc
+cd /home/$USER/path/to/luck-mcp
 make migrate
 ```
 
@@ -354,24 +376,37 @@ As tools disponiveis agora sao:
 - `project_brief`
 
 ### 8.0 Fluxo diario simples (para leigos)
-1. No terminal, dentro de `luck-mpc`, rode:
+1. No terminal, dentro de `luck-mcp`, rode:
 ```bash
 make up
 make migrate
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 ```
-2. No Cursor (ou outro agent), comece localizando contexto concreto:
-- `search_across_repos` para descobrir em quais repos o tema aparece
-- `repo_find_docs` para docs
-- `repo_find_files` para arquivos/modulos
-- `repo_search` para tema/logica parecida
-3. Depois carregue memoria manual:
-- `project_brief` para `meu-projeto`
-4. Antes de codar em area sensivel:
-- rode `context_search` se precisar buscar memoria manual salva
-5. Quando tomar decisao importante:
-- rode `context_add` com `kind=summary` e `importance` alta
-5. No fim do dia (opcional):
+2. No chat da IA, diga:
+
+```text
+use codebase memory for this session
+```
+
+3. Em seguida, peça um resumo do projeto:
+
+```text
+Use project_brief no projeto "meu-projeto" com max_items=20 e me mostre um resumo simples.
+```
+
+4. Se precisar achar algo:
+- `repo_find_docs` para documentacao
+- `repo_find_files` para arquivos
+- `search_across_repos` para descobrir outros repos relacionados
+- `repo_search` para buscar logica parecida
+
+5. Antes de mexer em area sensivel:
+- use `context_search`
+
+6. Quando decidir algo importante:
+- use `context_add` com `kind="summary"`
+
+7. No fim do dia (opcional):
 ```bash
 make down
 ```
@@ -407,7 +442,17 @@ use codebase memory for this session
 4. Fim de tarefa grande:
 - salvar resumo final com `importance` alta
 
-### 8.2 Prompts prontos (copiar e colar)
+### 8.2 Como usar o codebase memory na pratica
+Pense assim:
+- `project_brief`: "me relembre o que importa"
+- `repo_find_docs`: "me mostre a documentacao certa"
+- `repo_find_files`: "me mostre onde isso fica"
+- `search_across_repos`: "isso existe em outros repositorios?"
+- `repo_search`: "me ache algo parecido"
+- `context_search`: "ja decidimos algo sobre isso antes?"
+- `context_add`: "guarde esta decisao para depois"
+
+### 8.3 Prompts prontos (copiar e colar)
 Inicio da sessao:
 
 ```text
@@ -436,7 +481,7 @@ tags=["gotcha","deploy"], importance=4,
 content="Problema: ... Causa: ... Solucao: ..."
 ```
 
-### 8.3 Formato de dados recomendado
+### 8.4 Formato de dados recomendado
 - `project`: nome estavel do projeto (ex: `nexus-api`)
 - `kind`:
   - `summary` para decisoes e resumos oficiais
