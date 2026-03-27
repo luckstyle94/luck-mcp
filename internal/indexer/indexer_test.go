@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"luck-mpc/internal/repository"
 )
 
 func TestSplitContentIntoChunks(t *testing.T) {
@@ -81,6 +83,187 @@ func TestBuildAutoTags(t *testing.T) {
 	}
 }
 
+func TestExtractSignals(t *testing.T) {
+	content := `
+import "github.com/acme/auth"
+source = "terraform-aws-modules/vpc/aws"
+const endpoint = "/api/v1/login"
+const url = "https://api.example.com/v1/users"
+DATABASE_URL=postgres://local
+`
+	signals := extractSignals("docs/auth/README.md", content)
+	if len(signals) == 0 {
+		t.Fatalf("expected signals")
+	}
+
+	has := func(signalType, normalized string) bool {
+		for _, signal := range signals {
+			if signal.SignalType == signalType && signal.NormalizedValue == normalized {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !has("import_ref", "github.com/acme/auth") {
+		t.Fatalf("expected import_ref signal in %+v", signals)
+	}
+	if !has("terraform_source", "terraform-aws-modules/vpc/aws") {
+		t.Fatalf("expected terraform_source signal in %+v", signals)
+	}
+	if !has("endpoint", "/api/v1/login") {
+		t.Fatalf("expected endpoint signal in %+v", signals)
+	}
+	if !has("url", "https://api.example.com/v1/users") {
+		t.Fatalf("expected url signal in %+v", signals)
+	}
+	if !has("env_var", "database_url") {
+		t.Fatalf("expected env_var signal in %+v", signals)
+	}
+	if !has("path_hint", "docs/auth/readme.md") {
+		t.Fatalf("expected path_hint signal in %+v", signals)
+	}
+}
+
+func TestExtractSignals_StackSpecific(t *testing.T) {
+	content := `
+package auth
+func LoginUser() {}
+type AuthService struct{}
+
+class AuthClient:
+    pass
+def load_user():
+    return None
+
+export function createSession() {}
+
+resource "aws_s3_bucket" "logs" {}
+module "network" {}
+
+# Authentication Overview
+`
+	signals := extractSignals("infra/auth/main.tf", content)
+
+	has := func(signalType, normalized string) bool {
+		for _, signal := range signals {
+			if signal.SignalType == signalType && signal.NormalizedValue == normalized {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !has("go_package", "auth") {
+		t.Fatalf("expected go_package signal in %+v", signals)
+	}
+	if !has("go_func", "loginuser") {
+		t.Fatalf("expected go_func signal in %+v", signals)
+	}
+	if !has("go_type", "authservice") {
+		t.Fatalf("expected go_type signal in %+v", signals)
+	}
+	if !has("py_class", "authclient") {
+		t.Fatalf("expected py_class signal in %+v", signals)
+	}
+	if !has("py_def", "load_user") {
+		t.Fatalf("expected py_def signal in %+v", signals)
+	}
+	if !has("js_symbol", "createsession") {
+		t.Fatalf("expected js_symbol signal in %+v", signals)
+	}
+	if !has("tf_resource", "aws_s3_bucket:logs") {
+		t.Fatalf("expected tf_resource signal in %+v", signals)
+	}
+	if !has("tf_module", "network") {
+		t.Fatalf("expected tf_module signal in %+v", signals)
+	}
+	if !has("doc_heading", "authentication overview") {
+		t.Fatalf("expected doc_heading signal in %+v", signals)
+	}
+}
+
+func TestExtractSignals_ReactAnsibleAndHTTP(t *testing.T) {
+	reactContent := `
+import React from "react"
+import { Route } from "react-router-dom"
+
+export function AuthPage() {
+  const data = fetch("/api/v1/session")
+  return <Route path="/auth/login" element={<LoginPage />} />
+}
+
+const LoginPage = () => null
+
+function useSession() {}
+
+router.get("/internal/health", handler)
+axios.post("/api/v1/login")
+`
+	reactSignals := extractSignals("frontend/src/AuthPage.tsx", reactContent)
+
+	has := func(signals []repository.FileSignalInput, signalType, normalized string) bool {
+		for _, signal := range signals {
+			if signal.SignalType == signalType && signal.NormalizedValue == normalized {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !has(reactSignals, "react_component", "authpage") {
+		t.Fatalf("expected react_component authpage in %+v", reactSignals)
+	}
+	if !has(reactSignals, "react_component", "loginpage") {
+		t.Fatalf("expected react_component loginpage in %+v", reactSignals)
+	}
+	if !has(reactSignals, "react_hook", "usesession") {
+		t.Fatalf("expected react_hook usesession in %+v", reactSignals)
+	}
+	if !has(reactSignals, "route_path", "/auth/login") {
+		t.Fatalf("expected route_path in %+v", reactSignals)
+	}
+	if !has(reactSignals, "http_route", "get /internal/health") {
+		t.Fatalf("expected http_route in %+v", reactSignals)
+	}
+	if !has(reactSignals, "http_client_call", "post /api/v1/login") {
+		t.Fatalf("expected http_client_call post in %+v", reactSignals)
+	}
+	if !has(reactSignals, "http_client_call", "fetch /api/v1/session") {
+		t.Fatalf("expected http_client_call fetch in %+v", reactSignals)
+	}
+
+	ansibleContent := `
+- hosts: app
+  tasks:
+    - name: Copy config
+      ansible.builtin.copy:
+        src: app.conf
+        dest: /etc/app.conf
+    - role: common
+`
+	ansibleSignals := extractSignals("infra/ansible/playbook.yml", ansibleContent)
+	if !has(ansibleSignals, "ansible_hosts", "app") {
+		t.Fatalf("expected ansible_hosts in %+v", ansibleSignals)
+	}
+	if !has(ansibleSignals, "ansible_module", "ansible.builtin.copy") {
+		t.Fatalf("expected ansible_module in %+v", ansibleSignals)
+	}
+	if !has(ansibleSignals, "ansible_role", "common") {
+		t.Fatalf("expected ansible_role in %+v", ansibleSignals)
+	}
+
+	openAPIContent := `
+/v1/users:
+  get:
+    description: list users
+`
+	openAPISignals := extractSignals("docs/openapi.yaml", openAPIContent)
+	if !has(openAPISignals, "openapi_path", "/v1/users") {
+		t.Fatalf("expected openapi_path in %+v", openAPISignals)
+	}
+}
+
 func TestValidateOptions(t *testing.T) {
 	dir := t.TempDir()
 	opts := normalizeOptions(Options{Project: "proj", RootPath: dir, Mode: "changed", ChunkSize: 1000, ChunkOverlap: 200, MaxFileBytes: 1024})
@@ -130,5 +313,29 @@ func TestSanitizeToValidUTF8_AlreadyValid(t *testing.T) {
 	}
 	if sanitized != "decisao de arquitetura" {
 		t.Fatalf("unexpected sanitized value: %q", sanitized)
+	}
+}
+
+func TestShouldReindexIndexedFile(t *testing.T) {
+	valid := repository.IndexedFile{
+		Path:        "lambda_function.py",
+		ContentHash: "hash1",
+		Language:    "python",
+		FileType:    "code",
+		SizeBytes:   1234,
+		ChunkCount:  4,
+		Status:      "indexed",
+	}
+	if shouldReindexIndexedFile("lambda_function.py", valid) {
+		t.Fatalf("expected valid indexed file to be reused")
+	}
+
+	stale := valid
+	stale.FileType = "unknown"
+	stale.Language = "text"
+	stale.SizeBytes = 0
+	stale.ChunkCount = 0
+	if !shouldReindexIndexedFile("lambda_function.py", stale) {
+		t.Fatalf("expected stale metadata to force reindex")
 	}
 }

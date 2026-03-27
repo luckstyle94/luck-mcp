@@ -44,7 +44,8 @@ func runServer() {
 	repo := repository.NewPostgresDocumentRepository(database)
 	embedClient := embeddings.NewOllamaClient(cfg.OllamaURL, cfg.OllamaEmbedModel, 15*time.Second, logger)
 	ctxService := service.NewContextService(repo, embedClient, cfg.ProjectDefault, cfg.ExpectedEmbedding, logger)
-	server := mcp.NewServer(ctxService, logger, "context-memory-mcp", "0.1.0", os.Stdin, os.Stdout)
+	codebaseService := service.NewCodebaseService(repo, embedClient, cfg.ExpectedEmbedding, logger)
+	server := mcp.NewServer(ctxService, codebaseService, logger, "context-memory-mcp", "0.2.0", os.Stdin, os.Stdout)
 
 	logger.Info("starting mcp server", slog.String("config", cfg.Redacted()))
 	if err := server.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {

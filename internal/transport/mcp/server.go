@@ -22,10 +22,11 @@ const (
 )
 
 type Server struct {
-	service *service.ContextService
-	logger  *slog.Logger
-	name    string
-	version string
+	context  *service.ContextService
+	codebase *service.CodebaseService
+	logger   *slog.Logger
+	name     string
+	version  string
 
 	reader *bufio.Reader
 	writer io.Writer
@@ -42,7 +43,8 @@ const (
 )
 
 func NewServer(
-	svc *service.ContextService,
+	contextSvc *service.ContextService,
+	codebaseSvc *service.CodebaseService,
 	logger *slog.Logger,
 	name string,
 	version string,
@@ -59,12 +61,13 @@ func NewServer(
 		version = "0.1.0"
 	}
 	return &Server{
-		service: svc,
-		logger:  logger,
-		name:    name,
-		version: version,
-		reader:  bufio.NewReader(stdin),
-		writer:  stdout,
+		context:  contextSvc,
+		codebase: codebaseSvc,
+		logger:   logger,
+		name:     name,
+		version:  version,
+		reader:   bufio.NewReader(stdin),
+		writer:   stdout,
 	}
 }
 
@@ -187,12 +190,74 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 	)
 
 	switch toolName {
+	case "repo_list":
+		repos, err := s.codebase.ListRepos(ctx)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, map[string]any{"repos": repos}, false)
+
+	case "repo_register":
+		var in service.RepoRegisterInput
+		if err := decodeJSONStrict(args, &in); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		repo, err := s.codebase.RegisterRepo(ctx, in)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, repo, false)
+
+	case "repo_search":
+		var in service.RepoSearchInput
+		if err := decodeJSONStrict(args, &in); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		results, err := s.codebase.RepoSearch(ctx, in)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, results, false)
+
+	case "search_across_repos":
+		var in service.SearchAcrossReposInput
+		if err := decodeJSONStrict(args, &in); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		results, err := s.codebase.SearchAcrossRepos(ctx, in)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, results, false)
+
+	case "repo_find_files":
+		var in service.FindFilesInput
+		if err := decodeJSONStrict(args, &in); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		results, err := s.codebase.FindFiles(ctx, in)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, results, false)
+
+	case "repo_find_docs":
+		var in service.FindFilesInput
+		if err := decodeJSONStrict(args, &in); err != nil {
+			return invalidParams(req.ID, err)
+		}
+		results, err := s.codebase.FindDocs(ctx, in)
+		if err != nil {
+			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
+		}
+		return toolExecutionResponse(req.ID, results, false)
+
 	case "context_add":
 		var in service.AddContextInput
 		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
-		id, err := s.service.AddContext(ctx, in)
+		id, err := s.context.AddContext(ctx, in)
 		if err != nil {
 			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
 		}
@@ -203,7 +268,7 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
-		results, err := s.service.SearchContext(ctx, in)
+		results, err := s.context.SearchContext(ctx, in)
 		if err != nil {
 			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
 		}
@@ -214,7 +279,7 @@ func (s *Server) handleToolCall(ctx context.Context, req rpcRequest) rpcResponse
 		if err := decodeJSONStrict(args, &in); err != nil {
 			return invalidParams(req.ID, err)
 		}
-		brief, err := s.service.ProjectBrief(ctx, in)
+		brief, err := s.context.ProjectBrief(ctx, in)
 		if err != nil {
 			return toolExecutionResponse(req.ID, map[string]string{"error": err.Error()}, true)
 		}

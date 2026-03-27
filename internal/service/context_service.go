@@ -15,7 +15,7 @@ import (
 )
 
 type ContextService struct {
-	repo              repository.DocumentRepository
+	store             repository.Store
 	embeddings        embeddings.Client
 	defaultProject    string
 	expectedEmbedding int
@@ -46,7 +46,7 @@ type ProjectBriefInput struct {
 }
 
 func NewContextService(
-	repo repository.DocumentRepository,
+	store repository.Store,
 	embeddingsClient embeddings.Client,
 	defaultProject string,
 	expectedEmbedding int,
@@ -56,7 +56,7 @@ func NewContextService(
 		logger = slog.Default()
 	}
 	return &ContextService{
-		repo:              repo,
+		store:             store,
 		embeddings:        embeddingsClient,
 		defaultProject:    strings.TrimSpace(defaultProject),
 		expectedEmbedding: expectedEmbedding,
@@ -65,9 +65,9 @@ func NewContextService(
 }
 
 func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (int64, error) {
-	project := s.resolveProject(in.Project)
-	if project == "" {
-		return 0, fmt.Errorf("%w: project is required", domain.ErrInvalidInput)
+	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	if err != nil {
+		return 0, err
 	}
 
 	kind := domain.Kind(strings.ToLower(strings.TrimSpace(in.Kind)))
@@ -92,10 +92,10 @@ func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (in
 	path := normalizePath(in.Path)
 	hash := hashContent(content)
 
-	if existingID, found, err := s.repo.FindByProjectAndContentHash(ctx, project, hash); err == nil && found {
+	if existingID, found, err := s.store.FindMemoryByRepoAndContentHash(ctx, repo.ID, hash); err == nil && found {
 		s.logger.Info("context deduplicated",
-			slog.Int64("doc_id", existingID),
-			slog.String("project", project),
+			slog.Int64("entry_id", existingID),
+			slog.String("repo", repo.Name),
 			slog.String("kind", string(kind)),
 			slog.Int("content_size", len(content)),
 			slog.String("path", valueOrEmpty(path)),
@@ -110,13 +110,12 @@ func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (in
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", domain.ErrEmbeddingFailed, err)
 	}
-
 	if len(embedding) != s.expectedEmbedding {
 		return 0, fmt.Errorf("%w: embedding size is %d, expected %d", domain.ErrEmbeddingFailed, len(embedding), s.expectedEmbedding)
 	}
 
-	id, err := s.repo.InsertDocumentWithEmbedding(ctx, repository.AddDocumentInput{
-		Project:     project,
+	id, err := s.store.InsertMemoryWithEmbedding(ctx, repository.AddMemoryInput{
+		RepoID:      repo.ID,
 		Kind:        kind,
 		Path:        path,
 		Tags:        tags,
@@ -130,8 +129,8 @@ func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (in
 	}
 
 	s.logger.Info("context added",
-		slog.Int64("doc_id", id),
-		slog.String("project", project),
+		slog.Int64("entry_id", id),
+		slog.String("repo", repo.Name),
 		slog.String("kind", string(kind)),
 		slog.Int("content_size", len(content)),
 		slog.String("path", valueOrEmpty(path)),
@@ -142,9 +141,9 @@ func (s *ContextService) AddContext(ctx context.Context, in AddContextInput) (in
 }
 
 func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInput) ([]domain.SearchResult, error) {
-	project := s.resolveProject(in.Project)
-	if project == "" {
-		return nil, fmt.Errorf("%w: project is required", domain.ErrInvalidInput)
+	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	query := strings.TrimSpace(in.Query)
@@ -182,8 +181,8 @@ func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInpu
 		return nil, fmt.Errorf("%w: embedding size is %d, expected %d", domain.ErrEmbeddingFailed, len(embedding), s.expectedEmbedding)
 	}
 
-	results, err := s.repo.Search(ctx, repository.SearchDocumentsInput{
-		Project:        project,
+	results, err := s.store.SearchMemory(ctx, repository.SearchMemoryInput{
+		RepoID:         repo.ID,
 		Kind:           kind,
 		PathPrefix:     pathPrefix,
 		Tags:           tags,
@@ -195,7 +194,7 @@ func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInpu
 	}
 
 	s.logger.Info("context searched",
-		slog.String("project", project),
+		slog.String("repo", repo.Name),
 		slog.String("kind", string(kind)),
 		slog.String("path_prefix", valueOrEmpty(pathPrefix)),
 		slog.Int("tags_count", len(tags)),
@@ -203,14 +202,13 @@ func (s *ContextService) SearchContext(ctx context.Context, in SearchContextInpu
 		slog.Int("k", k),
 		slog.Int("result_count", len(results)),
 	)
-
 	return results, nil
 }
 
 func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput) (string, error) {
-	project := s.resolveProject(in.Project)
-	if project == "" {
-		return "", fmt.Errorf("%w: project is required", domain.ErrInvalidInput)
+	repo, err := s.resolveRepo(ctx, in.Project, nil)
+	if err != nil {
+		return "", err
 	}
 
 	maxItems := 20
@@ -224,16 +222,14 @@ func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput)
 		maxItems = 100
 	}
 
-	items, err := s.repo.ListBriefItems(ctx, project, maxItems)
+	items, err := s.store.ListMemoryBriefItems(ctx, repo.ID, maxItems)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
 	}
-
 	if len(items) == 0 {
 		return "Nenhum contexto encontrado para o projeto.", nil
 	}
 
-	// Reforca prioridade para summaries e importance alta antes de montar o texto final.
 	sort.SliceStable(items, func(i, j int) bool {
 		iSummary := items[i].Kind == domain.KindSummary
 		jSummary := items[j].Kind == domain.KindSummary
@@ -248,7 +244,7 @@ func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput)
 
 	var b strings.Builder
 	b.WriteString("Brief de contexto do projeto ")
-	b.WriteString(project)
+	b.WriteString(repo.Name)
 	b.WriteString(":\n")
 	for _, item := range items {
 		b.WriteString("- [")
@@ -270,12 +266,26 @@ func (s *ContextService) ProjectBrief(ctx context.Context, in ProjectBriefInput)
 	}
 
 	s.logger.Info("project brief generated",
-		slog.String("project", project),
+		slog.String("repo", repo.Name),
 		slog.Int("max_items", maxItems),
 		slog.Int("returned_items", len(items)),
 	)
-
 	return strings.TrimSpace(b.String()), nil
+}
+
+func (s *ContextService) resolveRepo(ctx context.Context, project string, rootPath *string) (domain.Repo, error) {
+	name := strings.TrimSpace(project)
+	if name == "" {
+		name = s.defaultProject
+	}
+	if name == "" {
+		return domain.Repo{}, fmt.Errorf("%w: project is required", domain.ErrInvalidInput)
+	}
+	repo, err := s.store.EnsureRepo(ctx, name, rootPath)
+	if err != nil {
+		return domain.Repo{}, fmt.Errorf("%w: %v", domain.ErrPersistenceFailed, err)
+	}
+	return repo, nil
 }
 
 func normalizeTags(tags []string) []string {
@@ -314,16 +324,20 @@ func normalizePath(path *string) *string {
 	return &p
 }
 
+func normalizeOptionalText(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	text := strings.TrimSpace(*v)
+	if text == "" {
+		return nil
+	}
+	return &text
+}
+
 func hashContent(content string) string {
 	h := sha256.Sum256([]byte(content))
 	return hex.EncodeToString(h[:])
-}
-
-func (s *ContextService) resolveProject(project string) string {
-	if p := strings.TrimSpace(project); p != "" {
-		return p
-	}
-	return s.defaultProject
 }
 
 func valueOrEmpty(v *string) string {

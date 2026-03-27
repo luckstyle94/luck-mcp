@@ -17,19 +17,36 @@ import (
 
 type stubRepository struct{}
 
-func (s *stubRepository) FindByProjectAndContentHash(_ context.Context, _, _ string) (int64, bool, error) {
+func (s *stubRepository) EnsureRepo(_ context.Context, name string, rootPath *string) (domain.Repo, error) {
+	return domain.Repo{ID: 1, Name: name, RootPath: rootPath, Active: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+}
+
+func (s *stubRepository) UpsertRepo(_ context.Context, input repository.UpsertRepoInput) (domain.Repo, error) {
+	return domain.Repo{ID: 1, Name: input.Name, RootPath: input.RootPath, Description: input.Description, Tags: input.Tags, Active: input.Active == nil || *input.Active, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+}
+
+func (s *stubRepository) GetRepoByName(_ context.Context, name string) (domain.Repo, bool, error) {
+	repo, _ := s.EnsureRepo(context.Background(), name, nil)
+	return repo, true, nil
+}
+
+func (s *stubRepository) ListRepos(_ context.Context) ([]domain.Repo, error) {
+	return []domain.Repo{{ID: 1, Name: "review-local", Active: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}}, nil
+}
+
+func (s *stubRepository) FindMemoryByRepoAndContentHash(_ context.Context, _ int64, _ string) (int64, bool, error) {
 	return 0, false, nil
 }
 
-func (s *stubRepository) InsertDocumentWithEmbedding(_ context.Context, _ repository.AddDocumentInput) (int64, error) {
+func (s *stubRepository) InsertMemoryWithEmbedding(_ context.Context, _ repository.AddMemoryInput) (int64, error) {
 	return 1, nil
 }
 
-func (s *stubRepository) Search(_ context.Context, _ repository.SearchDocumentsInput) ([]domain.SearchResult, error) {
+func (s *stubRepository) SearchMemory(_ context.Context, _ repository.SearchMemoryInput) ([]domain.SearchResult, error) {
 	return nil, nil
 }
 
-func (s *stubRepository) ListBriefItems(_ context.Context, _ string, _ int) ([]domain.BriefItem, error) {
+func (s *stubRepository) ListMemoryBriefItems(_ context.Context, _ int64, _ int) ([]domain.BriefItem, error) {
 	return []domain.BriefItem{{
 		Kind:       domain.KindSummary,
 		Content:    "Resumo de bootstrap",
@@ -38,7 +55,7 @@ func (s *stubRepository) ListBriefItems(_ context.Context, _ string, _ int) ([]d
 	}}, nil
 }
 
-func (s *stubRepository) ListIndexedFiles(_ context.Context, _ string) ([]repository.IndexedFile, error) {
+func (s *stubRepository) ListIndexedFiles(_ context.Context, _ int64) ([]repository.IndexedFile, error) {
 	return nil, nil
 }
 
@@ -46,12 +63,32 @@ func (s *stubRepository) UpsertIndexedFile(_ context.Context, _ repository.Upser
 	return nil
 }
 
-func (s *stubRepository) DeleteIndexedFile(_ context.Context, _, _ string) error {
+func (s *stubRepository) DeleteIndexedFile(_ context.Context, _ int64, _ string) error {
 	return nil
 }
 
-func (s *stubRepository) DeleteAutoChunksByPath(_ context.Context, _, _ string) (int64, error) {
+func (s *stubRepository) DeleteIndexedChunksByPath(_ context.Context, _ int64, _ string) (int64, error) {
 	return 0, nil
+}
+
+func (s *stubRepository) InsertIndexedChunkWithEmbedding(_ context.Context, _ repository.AddIndexedChunkInput) (int64, error) {
+	return 1, nil
+}
+
+func (s *stubRepository) SearchIndexedChunks(_ context.Context, _ repository.SearchIndexedChunksInput) ([]domain.RepoSearchResult, error) {
+	return []domain.RepoSearchResult{{Repo: "review-local", Path: "README.md", Score: 0.9, FileType: "doc", Language: "markdown", Content: "README bootstrap"}}, nil
+}
+
+func (s *stubRepository) ReplaceFileSignals(_ context.Context, _ int64, _ string, _ []repository.FileSignalInput) error {
+	return nil
+}
+
+func (s *stubRepository) DeleteFileSignalsByPath(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
+func (s *stubRepository) FindFiles(_ context.Context, _ repository.FindFilesInput) ([]domain.FileMatch, error) {
+	return []domain.FileMatch{{Repo: "review-local", Path: "README.md", Score: 0.95, FileType: "doc", Language: "markdown", SizeBytes: 1024, Snippet: "README bootstrap"}}, nil
 }
 
 type stubEmbeddings struct{}
@@ -60,9 +97,15 @@ func (s *stubEmbeddings) Embed(_ context.Context, _ string) ([]float64, error) {
 	return make([]float64, 768), nil
 }
 
+func newTestServer() *Server {
+	repo := &stubRepository{}
+	ctxSvc := service.NewContextService(repo, &stubEmbeddings{}, "", 768, nil)
+	codebaseSvc := service.NewCodebaseService(repo, &stubEmbeddings{}, 768, nil)
+	return NewServer(ctxSvc, codebaseSvc, nil, "", "", bytes.NewBuffer(nil), io.Discard)
+}
+
 func TestHandleToolCall_AcceptsMeta(t *testing.T) {
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", bytes.NewBuffer(nil), io.Discard)
+	srv := newTestServer()
 
 	req := rpcRequest{
 		JSONRPC: "2.0",
@@ -89,9 +132,103 @@ func TestHandleToolCall_AcceptsMeta(t *testing.T) {
 	}
 }
 
+func TestHandleToolCall_RepoSearch(t *testing.T) {
+	srv := newTestServer()
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("11"),
+		Method:  "tools/call",
+		Params: json.RawMessage(`{
+			"name": "repo_search",
+			"arguments": {"query": "bootstrap", "mode": "text"}
+		}`),
+	}
+
+	res := srv.handleToolCall(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
+func TestHandleToolCall_SearchAcrossRepos(t *testing.T) {
+	srv := newTestServer()
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("14"),
+		Method:  "tools/call",
+		Params: json.RawMessage(`{
+			"name": "search_across_repos",
+			"arguments": {"query": "bootstrap", "mode": "hybrid"}
+		}`),
+	}
+
+	res := srv.handleToolCall(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
+func TestHandleToolCall_RepoRegister(t *testing.T) {
+	srv := newTestServer()
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("10"),
+		Method:  "tools/call",
+		Params: json.RawMessage(`{
+			"name": "repo_register",
+			"arguments": {"name": "review-local", "root_path": "/workspace/review-local", "tags": ["backend"]}
+		}`),
+	}
+
+	res := srv.handleToolCall(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
+func TestHandleToolCall_RepoFindFiles(t *testing.T) {
+	srv := newTestServer()
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("12"),
+		Method:  "tools/call",
+		Params: json.RawMessage(`{
+			"name": "repo_find_files",
+			"arguments": {"query": "README"}
+		}`),
+	}
+
+	res := srv.handleToolCall(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
+func TestHandleToolCall_RepoFindDocs(t *testing.T) {
+	srv := newTestServer()
+
+	req := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("13"),
+		Method:  "tools/call",
+		Params: json.RawMessage(`{
+			"name": "repo_find_docs",
+			"arguments": {"query": "bootstrap"}
+		}`),
+	}
+
+	res := srv.handleToolCall(context.Background(), req)
+	if res.Error != nil {
+		t.Fatalf("unexpected RPC error: %+v", res.Error)
+	}
+}
+
 func TestHandleToolCall_IgnoresUnknownEnvelopeFields(t *testing.T) {
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", bytes.NewBuffer(nil), io.Discard)
+	srv := newTestServer()
 
 	req := rpcRequest{
 		JSONRPC: "2.0",
@@ -112,8 +249,7 @@ func TestHandleToolCall_IgnoresUnknownEnvelopeFields(t *testing.T) {
 }
 
 func TestInitialize_EchoesClientProtocolVersion(t *testing.T) {
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", bytes.NewBuffer(nil), io.Discard)
+	srv := newTestServer()
 
 	req := rpcRequest{
 		JSONRPC: "2.0",
@@ -141,8 +277,7 @@ func TestInitialize_EchoesClientProtocolVersion(t *testing.T) {
 }
 
 func TestReadMessage_LineDelimitedJSON(t *testing.T) {
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n"), io.Discard)
+	srv := NewServer(nil, nil, nil, "", "", strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n"), io.Discard)
 
 	msg, err := srv.readMessage()
 	if err != nil {
@@ -157,8 +292,7 @@ func TestReadMessage_ContentLengthFramed(t *testing.T) {
 	payload := "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}"
 	frame := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
 
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", strings.NewReader(frame), io.Discard)
+	srv := NewServer(nil, nil, nil, "", "", strings.NewReader(frame), io.Discard)
 
 	msg, err := srv.readMessage()
 	if err != nil {
@@ -173,8 +307,7 @@ func TestWriteResponse_LineDelimitedMode(t *testing.T) {
 	in := strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n")
 	var out bytes.Buffer
 
-	svc := service.NewContextService(&stubRepository{}, &stubEmbeddings{}, "", 768, nil)
-	srv := NewServer(svc, nil, "", "", in, &out)
+	srv := NewServer(nil, nil, nil, "", "", in, &out)
 
 	_, err := srv.readMessage()
 	if err != nil {
