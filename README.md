@@ -18,7 +18,7 @@ cd /home/$USER/path/to/luck-mcp
 1. Quando abrir o dia/projeto:
 ```bash
 make up
-make migrate
+make health
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 ```
 
@@ -50,8 +50,9 @@ make down
 
 ## O que significa cada comando (sem jargao)
 - `make up`: liga os containers (Postgres, Ollama, MCP). Use quando for comecar a trabalhar.
-- `make migrate`: atualiza estrutura do banco. Use na primeira vez e sempre que entrar migration nova no repo.
-- `make index PROJECT=... ROOT=...`: indexacao incremental. Reprocessa so arquivos novos/alterados e remove do banco o que foi apagado no projeto. Antes de indexar, aplica as migrations automaticamente no banco ativo.
+- `make health`: verifica banco, schema e Ollama/modelo e mostra o proximo passo se algo estiver faltando.
+- `make migrate`: aplica apenas migrations pendentes e registra versoes/checksums. Use na primeira vez, quando entrar migration nova no repo ou se quiser sincronizar schema manualmente.
+- `make index PROJECT=... ROOT=...`: indexacao incremental. Reprocessa so arquivos novos/alterados e remove do banco o que foi apagado no projeto. Antes de indexar, garante que o schema esteja alinhado e aplica somente migrations pendentes.
 - `make index-full PROJECT=... ROOT=...`: reindex completo. Reprocessa todos os arquivos do projeto selecionado. Use quando quiser reconstruir a base de contexto do zero.
 - `make down`: desliga os containers. Use no fim do dia (opcional).
 - `docker compose build mcp`: recompila imagem do MCP. Use quando voce alterou codigo deste repositorio MCP.
@@ -288,7 +289,7 @@ make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 O que cada comando faz:
 1. `build mcp`: gera a imagem local do servidor MCP.
 2. `up -d postgres ollama mcp`: sobe banco, embeddings e container base do MCP.
-3. `make migrate`: aplica schema no banco (`0001` ate `0006`).
+3. `make migrate`: aplica apenas migrations pendentes no banco.
 4. `ollama pull`: baixa o modelo de embedding.
 5. `make index`: faz a primeira indexacao automatica do projeto.
 
@@ -310,7 +311,9 @@ docker compose down
 Rode quando:
 - for primeira subida do ambiente
 - entrar migration nova no repositorio
-- quiser garantir schema alinhado
+- quiser sincronizar schema manualmente
+
+No uso diario, `make index` ja verifica o schema e aplica somente migrations pendentes.
 
 Comando:
 ```bash
@@ -398,7 +401,6 @@ As tools disponiveis agora sao:
 1. No terminal, dentro de `luck-mcp`, rode:
 ```bash
 make up
-make migrate
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 ```
 2. No chat da IA, diga:

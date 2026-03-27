@@ -18,7 +18,7 @@ cd /home/$USER/path/to/luck-mcp
 1. When you start your day/project:
 ```bash
 make up
-make migrate
+make health
 make index PROJECT=my-project ROOT=/absolute/path/to/project
 ```
 
@@ -50,8 +50,9 @@ make down
 
 ## What each command means (plain language)
 - `make up`: starts containers (Postgres, Ollama, MCP). Use when starting work.
-- `make migrate`: updates database schema. Use on first setup and whenever new migrations are added.
-- `make index PROJECT=... ROOT=...`: incremental indexing. Reprocesses only new/changed files and removes indexed data for deleted files. Before indexing, it automatically applies migrations to the active database.
+- `make health`: checks database, schema, and Ollama/model readiness and shows the next step if something is missing.
+- `make migrate`: applies only pending migrations and records versions/checksums. Use it on first setup, when new migrations are added, or when you want a manual schema sync.
+- `make index PROJECT=... ROOT=...`: incremental indexing. Reprocesses only new/changed files and removes indexed data for deleted files. Before indexing, it ensures schema is aligned and applies only pending migrations.
 - `make index-full PROJECT=... ROOT=...`: full reindex. Reprocesses all files for the selected project. Use when you want to rebuild context from scratch.
 - `make down`: stops containers. Use at end of day (optional).
 - `docker compose build mcp`: rebuilds MCP image. Use when you changed code in this MCP repository.
@@ -273,7 +274,7 @@ make index PROJECT=my-project ROOT=/absolute/path/to/repo
 What each command does:
 1. `build mcp`: builds the local MCP server image.
 2. `up -d postgres ollama mcp`: starts database, embeddings service, and base MCP container.
-3. `make migrate`: applies DB schema (`0001` through `0006`).
+3. `make migrate`: applies only pending DB migrations.
 4. `ollama pull`: downloads the embedding model.
 5. `make index`: runs the first automatic indexing for the project.
 
@@ -295,7 +296,9 @@ docker compose down
 Run it when:
 - this is the first environment startup
 - new migrations are added to the repository
-- you want to ensure schema is aligned
+- you want a manual schema sync
+
+For daily work, `make index` already checks schema and applies only pending migrations.
 
 Command:
 ```bash
@@ -383,7 +386,6 @@ Available tools:
 1. In terminal, inside `luck-mcp`, run:
 ```bash
 make up
-make migrate
 make index PROJECT=my-project ROOT=/absolute/path/to/project
 ```
 2. In Cursor (or another agent), start by locating concrete context:

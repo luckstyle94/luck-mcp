@@ -7,6 +7,7 @@ Guia rapido para colocar o MCP no ar e usar no Cursor ou Codex em poucos minutos
 ```bash
 cd /home/$USER/path/to/luck-mcp
 make up
+make health
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/projeto
 ```
 
@@ -28,8 +29,9 @@ make down
 ```
 
 ## O que e index, reindex e incremental?
-- `make index`: atualiza contexto automaticamente so do que mudou (arquivos novos/alterados/removidos). Esse e o comando do dia a dia e ja aplica migrations antes de indexar.
+- `make index`: atualiza contexto automaticamente so do que mudou (arquivos novos/alterados/removidos). Esse e o comando do dia a dia e so aplica migrations pendentes antes de indexar.
 - `make index-full`: refaz toda a indexacao do projeto do zero. Use quando quiser reconstruir tudo.
+- `make health`: confere banco, schema e Ollama/modelo e mostra o proximo passo se algo estiver quebrado.
 - `incremental`: significa "somente diferencas". Mais rapido.
 - `reindex completo`: significa "todos os arquivos novamente". Mais lento.
 
@@ -152,6 +154,7 @@ cd /home/$USER/path/to/luck-mcp
 
 docker compose build mcp
 docker compose up -d postgres ollama mcp
+make health
 make migrate
 docker compose exec ollama ollama pull nomic-embed-text
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
@@ -190,6 +193,7 @@ Depois:
 ```bash
 cd /home/$USER/path/to/luck-mcp
 docker compose up -d postgres ollama mcp
+make health
 make index PROJECT=meu-projeto ROOT=/caminho/absoluto/do/repo
 ```
 
